@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}批量运行 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>批量运行 <span class="muted">{{ run.name }} · {{ run.created_at }}</span></h1>
+<div class="stat">
+  {% set agg = namespace(pass=0, fail=0, na=0, manual=0) %}
+  {% for t in tasks %}
+    {% set agg.pass = agg.pass + t.stats.get('pass',0) %}
+    {% set agg.fail = agg.fail + t.stats.get('fail',0) %}
+    {% set agg.na = agg.na + t.stats.get('na',0) %}
+    {% set agg.manual = agg.manual + t.stats.get('manual',0) %}
+  {% endfor %}
+  <div class="s"><b style="color:#2e7d32">{{ agg.pass }}</b><span>符合</span></div>
+  <div class="s"><b style="color:#c62828">{{ agg.fail }}</b><span>不符合</span></div>
+  <div class="s"><b style="color:#90a4ae">{{ agg.na }}</b><span>不适用</span></div>
+  <div class="s"><b style="color:#ef6c00">{{ agg.manual }}</b><span>待人工</span></div>
+</div>
+
+<div class="card" style="padding:0;overflow:auto">
+<table>
+  <tr><th>主机</th><th>识别到的组件</th><th>基线</th><th>状态</th><th>符合</th><th>不符合</th><th>待人工</th><th>操作</th></tr>
+  {% for t in tasks %}
+  <tr>
+    <td><b>{{ t.hname or '?' }}</b><br><span class="muted">{{ t.ip }}</span></td>
+    <td>
+      {% if t.disc %}
+        {% if t.disc.error %}
+          <span class="err">{{ t.disc.error }}</span>
+        {% else %}
+          <span class="muted">系统：{{ t.disc.os or '-' }}</span><br>
+          {% for k in t.disc['keys'] %}<span class="badge b-na">{{ det_names.get(k, k) }}</span> {% endfor %}
+        {% endif %}
+      {% elif t.status == 'error' %}
+        <span class="err">{{ t.message }}</span>
+      {% else %}
+        <span class="muted">-</span>
+      {% endif %}
+    </td>
+    <td>{{ baselines[t.baseline].name if t.baseline in baselines else t.baseline }}</td>
+    <td><span class="badge b-{{ t.status }}">{{ {'done':'完成','running':'进行中','pending':'排队','error':'失败'}[t.status] }}</span></td>
+    <td>{{ t.stats.get('pass',0) }}</td>
+    <td style="color:#c62828">{{ t.stats.get('fail',0) }}</td>
+    <td style="color:#ef6c00">{{ t.stats.get('manual',0) }}</td>
+    <td><a class="btn small" href="/task/{{ t.id }}">报告</a> <a class="btn small green" href="/task/{{ t.id }}/export">Word</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<script>
+{% if not all_done %}
+setTimeout(() => location.reload(), 10000);
+{% endif %}
+</script>
+{% endblock %}
