@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}主机管理 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>主机管理</h1>
+<div class="grid">
+{% for h in hosts %}
+<div class="card">
+  <b>{{ h.name }}</b> <span class="muted">#{{ h.id }}</span>
+  <div style="margin:8px 0;font-size:13px">
+    {{ h.ip }}:{{ h.port }}<br>
+    系统：{{ {'linux':'Linux','windows':'Windows'}[h.os_type] }}　连接：{{ {'ssh':'SSH','winrm':'WinRM'}[h.conn_type or 'ssh'] }}<br>
+    账号：{{ h.username }}
+    {% if h.db_user %}<br>数据库账号：{{ h.db_user }}{% endif %}
+  </div>
+  <a class="btn small" href="/check/new?host={{ h.id }}">对该主机发起检查</a>
+  <form style="display:inline" method="post" action="/hosts/delete/{{ h.id }}" onsubmit="return confirm('删除主机 {{ h.name }}？')">
+    <button class="btn red">删除</button>
+  </form>
+</div>
+{% endfor %}
+</div>
+
+<div class="card" style="margin-top:20px">
+<h2>批量导入主机</h2>
+<form method="post" action="/hosts/import" enctype="multipart/form-data">
+  <div class="grid" style="grid-template-columns: 1fr 1fr">
+    <div>
+      <label>粘贴文本（每行一台主机，支持逗号/Tab分隔）</label>
+      <textarea name="import_text" rows="6" style="width:100%;font-family:Consolas,monospace;font-size:12px" placeholder="名称,IP,端口,系统类型,连接方式,账号,密码,数据库账号,数据库密码
+web-01,192.168.1.10,22,linux,ssh,root,P@ssw0rd,,
+db-01,192.168.1.20,22,linux,ssh,root,P@ssw0rd,root,DbP@ss
+win-01,192.168.1.30,5985,windows,winrm,administrator,P@ssw0rd,,"></textarea>
+    </div>
+    <div>
+      <label>或上传 CSV 文件（UTF-8）</label>
+      <input type="file" name="import_file" accept=".csv,.txt" style="padding:12px 0">
+      <div class="muted" style="margin-top:12px">
+        列顺序：<b>名称, IP, 端口, 系统类型(linux/windows), 连接方式(ssh/winrm), 账号, 密码, 数据库账号, 数据库密码</b><br>
+        端口可留空（ssh默认22 / winrm默认5985）；第一行是表头会自动跳过；密码加密存储。
+      </div>
+      <div style="margin-top:14px"><button class="btn">导入</button></div>
+    </div>
+  </div>
+</form>
+{% if import_result %}
+<div class="{{ 'ok' if not import_result.bad else 'err' }}">
+  导入成功 {{ import_result.ok }} 台{% if import_result.bad %}；失败 {{ import_result.bad|length }} 行：
+  <ul style="margin:6px 0 0 18px">{% for b in import_result.bad %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}
+</div>
+
+<div class="card" style="margin-top:20px">
+<h2>添加主机</h2>
+<form method="post">
+  <div class="grid">
+    <div>
+      <label>主机名称</label><input name="name" required placeholder="如：生产-web-01">
+    </div>
+    <div>
+      <label>IP 地址</label><input name="ip" required placeholder="10.0.0.1">
+    </div>
+    <div>
+      <label>端口（留空按连接方式自动：SSH 22 / WinRM 5985）</label><input name="port" placeholder="22 或 5985">
+    </div>
+    <div>
+      <label>系统类型</label>
+      <select name="os_type"><option value="linux">Linux</option><option value="windows">Windows</option></select>
+    </div>
+    <div>
+      <label>连接方式</label>
+      <select name="conn_type"><option value="ssh">SSH</option><option value="winrm">WinRM（Windows 无需 OpenSSH）</option></select>
+    </div>
+    <div>
+      <label>登录账号</label><input name="username" required placeholder="root / administrator">
+    </div>
+    <div>
+      <label>登录密码</label><input name="password" type="password" placeholder="留空则保持原密码">
+    </div>
+  </div>
+  <div class="grid" style="margin-top:6px">
+    <div>
+      <label>数据库账号（检查数据库基线时用，可选）</label><input name="db_user" placeholder="如 root">
+    </div>
+    <div>
+      <label>数据库密码（可选）</label><input name="db_pass" type="password" placeholder="留空则保持原密码">
+    </div>
+  </div>
+  <div style="margin-top:14px"><button class="btn">保存主机</button></div>
+</form>
+<div class="muted" style="margin-top:8px">说明：密码以加密方式存储在服务器上；检查命令全部为只读命令，不会修改目标主机。WinRM 主机需开启 Windows 远程管理（默认 5985 端口），账号需要是管理员组并在 WinRM 服务端配置了 NTLM 认证。</div>
+</div>
+{% endblock %}
