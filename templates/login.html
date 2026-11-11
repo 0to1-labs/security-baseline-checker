@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="login-box">
+  <div class="brand">🛡 安全基线检查系统</div>
+  <div class="card">
+    <form method="post">
+      <label>用户名</label>
+      <input name="username" autofocus>
+      <label>密码</label>
+      <input name="password" type="password">
+      <div style="margin-top:16px"><button class="btn" style="width:100%">登 录</button></div>
+      <div class="err">{{ error }}</div>
+    </form>
+  </div>
+</div>
+{% endblock %}
