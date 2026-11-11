@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}定时任务 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>定时扫描任务</h1>
+<p><a class="btn" href="#new">+ 新建定时任务</a></p>
+
+<div class="card" style="padding:0;overflow:auto">
+<table>
+  <tr><th>ID</th><th>名称</th><th>主机</th><th>检查模式</th><th>频率</th><th>状态</th><th>上次运行</th><th>下次运行</th><th>操作</th></tr>
+  {% for s in schedules %}
+  <tr>
+    <td>{{ s.id }}</td>
+    <td><b>{{ s.name }}</b></td>
+    <td>{{ s.host_names|length }} 台 <span class="muted">{{ s.host_names|join('、')|truncate(40) }}</span></td>
+    <td>{{ '自动识别' if s.mode == 'auto' else '指定：' + (s.baselines|join('、')) }}</td>
+    <td>{{ s.next }}</td>
+    <td><span class="badge b-{{ 'pass' if s.enabled else 'na' }}">{{ '启用' if s.enabled else '停用' }}</span></td>
+    <td class="muted">{{ s.last_run or '未运行' }}</td>
+    <td class="muted">{{ s.next.split('（下次 ')[1].rstrip('）') if '（下次 ' in s.next else '-' }}</td>
+    <td>
+      <form style="display:inline" method="post" action="/schedules/{{ s.id }}/run"><button class="btn small">立即运行</button></form>
+      <form style="display:inline" method="post" action="/schedules/{{ s.id }}/toggle"><button class="btn small gray">{{ '停用' if s.enabled else '启用' }}</button></form>
+      <form style="display:inline" method="post" action="/schedules/{{ s.id }}/delete" onsubmit="return confirm('删除定时任务 {{ s.name }}？')"><button class="btn red">删除</button></form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="9" style="text-align:center;padding:30px">暂无定时任务</td></tr>
+  {% endfor %}
+</table>
+</div>
+
+<div class="card" id="new" style="max-width:760px;margin-top:20px">
+<h2>新建定时任务</h2>
+<form method="post">
+  <label>任务名称</label>
+<input name="name" required placeholder="如：每日凌晨全量基线扫描">
+
+  <label>目标主机（可多选）</label>
+  <div style="max-height:220px;overflow:auto;border:1px solid #c3cfdd;border-radius:6px;padding:10px">
+    {% for h in hosts %}
+    <label style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px;color:#263238">
+      <input type="checkbox" name="host_ids" value="{{ h.id }}" style="width:auto">
+      <span>{{ h.name }}（{{ h.ip }} {{ {'linux':'Linux','windows':'Windows'}[h.os_type] }}）</span>
+    </label>
+    {% else %}
+    <div class="muted">还没有主机</div>
+    {% endfor %}
+  </div>
+
+  <label>检查模式</label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#263238">
+    <input type="radio" name="mode" value="auto" checked style="width:auto" onclick="document.getElementById('blbox').style.display='none'">
+    <span><b>自动识别（推荐）</b>：每台主机只跑识别到的基线</span>
+  </label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#263238">
+    <input type="radio" name="mode" value="fixed" style="width:auto" onclick="document.getElementById('blbox').style.display=''">
+    <span>指定基线</span>
+  </label>
+  <div id="blbox" style="display:none">
+    <select name="baselines" multiple size="5" style="width:100%">
+      {% for k, v in baselines.items() %}
+      <option value="{{ k }}">{{ v.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="muted">按住 Ctrl 多选</div>
+  </div>
+
+  <label>执行频率</label>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:#263238">
+    <label style="display:flex;gap:6px;align-items:center;margin:0">
+      <input type="radio" name="sched_type" value="daily" checked style="width:auto" onclick="fr(this)"> 每天
+      <input name="time_daily" value="02:00" style="width:80px" placeholder="HH:MM">
+    </label>
+    <label style="display:flex;gap:6px;align-items:center;margin:0">
+      <input type="radio" name="sched_type" value="hours" style="width:auto" onclick="fr(this)"> 每
+      <input name="interval_hours" value="24" style="width:60px"> 小时
+    </label>
+    <label style="display:flex;gap:6px;align-items:center;margin:0">
+      <input type="radio" name="sched_type" value="weekly" style="width:auto" onclick="fr(this)"> 每周
+      <select name="weekday" style="width:80px">
+        <option value="1">一</option><option value="2">二</option><option value="3">三</option>
+        <option value="4">四</option><option value="5">五</option><option value="6">六</option><option value="7">日</option>
+      </select>
+      <input name="time_weekly" value="02:00" style="width:80px" placeholder="HH:MM">
+    </label>
+  </div>
+  <div style="margin-top:16px"><button class="btn">保存定时任务</button></div>
+</form>
+</div>
+<script>
+function fr(el) { document.querySelectorAll('input[name$="_daily"],input[name="interval_hours"],input[name="time_weekly"]').forEach(i => i.style.opacity = 0.5); }
+</script>
+{% endblock %}
