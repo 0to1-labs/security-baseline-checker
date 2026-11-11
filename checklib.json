@@ -1,0 +1,4342 @@
+{
+ "linux": [
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "a) 身份标识和鉴别（禁止空密码登陆）",
+   "desc": "检查系统中是否存在密码为空的账号、口令数据库是否完整，以及 SSH 是否禁止空密码登录",
+   "why": "空密码账号等于大门没上锁——任何人都可以不输入密码直接登录系统，是最严重的基础漏洞之一；攻击者扫描到空密码账号即可瞬间拿下机器。",
+   "expected": "空密码账号无输出、pwdck 无输出、PermitEmptyPasswords=no，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统中是否存在密码为空的账号、口令数据库是否完整，以及 SSH 是否禁止空密码登录",
+   "commands": [
+    "awk -F: '($2==\"\"){print $1}' /etc/shadow",
+    "pwdck -n ALL",
+    "sshd -T 2>/dev/null | grep -i permitemptypasswords"
+   ],
+   "criteria": "空密码账号无输出、pwdck 无输出、PermitEmptyPasswords=no，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:1"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "b) 口令复杂度与更换（含：密码安全策略、检查密码是否安全）",
+   "desc": "检查口令有效期、最小长度、复杂度模块及历史口令限制是否已配置",
+   "why": "弱口令（短、简单、常见词）是暴力破解和撞库攻击的首要突破口，历史上大量服务器失陷源于弱口令；长期不更换的口令泄露后永久有效。",
+   "expected": "PASS_MAX_DAYS≤90 且 PASS_MIN_LEN≥8、pam_pwquality/passwdqc 已启用、remember=5，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查口令有效期、最小长度、复杂度模块及历史口令限制是否已配置",
+   "commands": [
+    "grep -E '^PASS_MAX_DAYS|^PASS_MIN_LEN' /etc/login.defs",
+    "grep -E 'pam_pwquality|pam_passwdqc' /etc/pam.d/system-auth /etc/pam.d/password-auth 2>/dev/null",
+    "grep -rE 'remember' /etc/pam.d/ 2>/dev/null | grep -v '^#'"
+   ],
+   "criteria": "PASS_MAX_DAYS≤90 且 PASS_MIN_LEN≥8、pam_pwquality/passwdqc 已启用、remember=5，即符合基线要求",
+   "manual_note": "弱密码字典检测需专用工具辅助",
+   "id": "linux:2"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "c) 登录失败处理（含：认证失败锁定策略）",
+   "desc": "检查登录认证配置中是否启用失败锁定策略（连续错误次数、锁定时间）",
+   "why": "如果不限制失败次数，攻击者可以对口令进行无限次猜测（暴力破解），口令再复杂也有被撞破的可能。",
+   "expected": "输出包含 pam_tally2 且 deny=5、lock_time=600 等锁定参数，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查登录认证配置中是否启用失败锁定策略（连续错误次数、锁定时间）",
+   "commands": [
+    "grep -rE 'pam_tally2|deny=|lock_time=' /etc/pam.d/system-auth /etc/pam.d/login /etc/pam.d/sshd /etc/pam.d/password-auth 2>/dev/null | grep -v '^#'"
+   ],
+   "criteria": "输出包含 pam_tally2 且 deny=5、lock_time=600 等锁定参数，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:3"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "d) 远程管理加密（含：ssh2 版本、禁止记住密码）",
+   "desc": "检查 SSH 协议版本是否启用 v2，以及是否存在 telnet/ftp/pop 等明文服务端口监听",
+   "why": "telnet/ftp 等明文协议传输时，用户名和口令可以被抓包工具直接截获；SSH1 协议存在已知漏洞；客户端保存密码会导致终端丢失/被他人使用时口令泄露。",
+   "expected": "Protocol=2 且无 23/21/110/143 端口监听，即符合基线要求",
+   "mode": "部分人工",
+   "content": "检查 SSH 协议版本是否启用 v2，以及是否存在 telnet/ftp/pop 等明文服务端口监听",
+   "commands": [
+    "sshd -T 2>/dev/null | grep -i '^protocol'",
+    "ss -tlnp 2>/dev/null | grep -E ':(23|21|110|143)\\b'"
+   ],
+   "criteria": "Protocol=2 且无 23/21/110/143 端口监听，即符合基线要求",
+   "manual_note": "客户端禁止记住密码、抓包验证是否明文需人工核实",
+   "id": "linux:4"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "e) 用户名唯一性",
+   "desc": "检查 /etc/passwd 中用户名和 UID 是否存在重复",
+   "why": "多人共用一个账号时，所有操作无法区分是谁做的，审计追溯失效；重复的 UID 会导致两个账号实际拥有相同权限，权限管理失控。",
+   "expected": "输出为空（UID、用户名均无重复），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 /etc/passwd 中用户名和 UID 是否存在重复",
+   "commands": [
+    "awk -F: '{print $3}' /etc/passwd | sort | uniq -d",
+    "awk -F: '{print $1}' /etc/passwd | sort | uniq -d"
+   ],
+   "criteria": "输出为空（UID、用户名均无重复），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:5"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "f) 双因素鉴别（含：动态口令验证）",
+   "desc": "检查系统是否配置双因素/动态口令认证模块",
+   "why": "仅靠单一口令时，口令一旦泄露（钓鱼、键盘记录、撞库）攻击者即可直接登录；双因素即使口令泄露，没有第二因素依然无法进入。",
+   "expected": "存在 pam_google_authenticator/pam_radius/pam_oath 等双因素配置，即具备条件",
+   "mode": "部分人工",
+   "content": "检查系统是否配置双因素/动态口令认证模块",
+   "commands": [
+    "grep -rE 'pam_google_authenticator|pam_radius|pam_oath' /etc/pam.d/ 2>/dev/null | grep -v '^#'"
+   ],
+   "criteria": "存在 pam_google_authenticator/pam_radius/pam_oath 等双因素配置，即具备条件",
+   "manual_note": "实际启用情况需询问管理员确认",
+   "id": "linux:6"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "管理密码",
+   "desc": "检查空密码账号、口令有效期与长度、历史口令限制（remember=5）及 su 切换限制（wheel 组）",
+   "why": "口令重用会导致历史泄露的口令长期可用；口令无有效期则泄露后永久有效；任何用户可 su 到 root 则提权门槛形同虚设。",
+   "expected": "无空密码账号、PASS_MAX_DAYS≤90、PASS_MIN_LEN≥8、remember=5、su 已启用 pam_wheel 且 wheel 组有管理成员，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查空密码账号、口令有效期与长度、历史口令限制（remember=5）及 su 切换限制（wheel 组）",
+   "commands": [
+    "awk -F: '($2==\"\"){print $1}' /etc/shadow",
+    "grep '^PASS_MAX_DAYS' /etc/login.defs",
+    "grep '^PASS_MIN_LEN' /etc/login.defs",
+    "grep -r 'remember' /etc/pam.d/ 2>/dev/null | grep -v '^#'",
+    "grep -E 'pam_wheel' /etc/pam.d/su",
+    "getent group wheel"
+   ],
+   "criteria": "无空密码账号、PASS_MAX_DAYS≤90、PASS_MIN_LEN≥8、remember=5、su 已启用 pam_wheel 且 wheel 组有管理成员，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:7"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "确保 uid 为 0 的用户只有 root",
+   "desc": "检查系统中 UID 为 0（超级用户特权）的账号是否只有 root",
+   "why": "任何 UID 为 0 的账号都拥有 root 全部权限；若出现第二个 UID 0 账号，通常意味着攻击者植入的后门账号或管理失误，等于系统里多了一个隐形超级管理员，且可能绕过审计监控。",
+   "expected": "输出仅 root 一行，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统中 UID 为 0（超级用户特权）的账号是否只有 root",
+   "commands": [
+    "awk -F: '$3==0{print $1}' /etc/passwd"
+   ],
+   "criteria": "输出仅 root 一行，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:8"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "禁止 root 登陆",
+   "desc": "检查 SSH 是否禁止 root 直接远程登录",
+   "why": "root 直连是爆破攻击的首选目标；用普通账号+提权的方式，每一次提权都有审计记录，可追溯“谁、什么时候、做了什么”，同时降低 root 口令被直接爆破的风险。",
+   "expected": "PermitRootLogin = no（或 prohibit-password），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 SSH 是否禁止 root 直接远程登录",
+   "commands": [
+    "sshd -T 2>/dev/null | grep -i permitrootlogin"
+   ],
+   "criteria": "PermitRootLogin = no（或 prohibit-password），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:9"
+  },
+  {
+   "baseline": "linux",
+   "category": "一、身份鉴别",
+   "name": "修改 ssh 默认端口",
+   "desc": "检查 SSH 服务监听端口是否为非默认端口（非 22）",
+   "why": "22 端口是全球扫描器的固定探测目标，几乎全天候被扫描和爆破；修改默认端口后，自动化攻击的命中率大幅下降（注意：属于“隐蔽安全”手段，不能替代口令和漏洞防护）。",
+   "expected": "Port 不等于 22，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 SSH 服务监听端口是否为非默认端口（非 22）",
+   "commands": [
+    "sshd -T 2>/dev/null | grep -i '^port'"
+   ],
+   "criteria": "Port 不等于 22，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:10"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "a) 访问控制功能（含：敏感文件权限）",
+   "desc": "检查敏感文件属主与权限是否符合加固表、是否设置不可改变位（i 位）、aliases 危险别名是否已注释",
+   "why": "关键文件权限过宽时，普通用户可读（泄露账号结构）甚至可写（直接篡改账号、植入后门）；不可改变位可防止文件被恶意修改或误删；aliases 危险别名可能被利用发起邮件欺骗攻击。",
+   "expected": "权限符合加固表（fstab 644、passwd 644、shadow 600、group 600、services 600、aliases 755、securetty 400，属主均 root）、相关文件含 i 位、危险别名输出为空，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查敏感文件属主与权限是否符合加固表、是否设置不可改变位（i 位）、aliases 危险别名是否已注释",
+   "commands": [
+    "ls -l /etc/fstab /etc/passwd /etc/shadow /etc/group /etc/services /etc/aliases /etc/securetty",
+    "lsattr /etc/passwd /etc/shadow /etc/group /etc/gshadow /etc/services 2>/dev/null",
+    "grep -vE '^#|^$' /etc/aliases | grep -E '^(decode|games|ingres|system|toor|uucp|manager|dumper|operator):'"
+   ],
+   "criteria": "权限符合加固表（fstab 644、passwd 644、shadow 600、group 600、services 600、aliases 755、securetty 400，属主均 root）、相关文件含 i 位、危险别名输出为空，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:11"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "b) 管理用户角色权限分离",
+   "desc": "管理账号清单及角色分工情况",
+   "why": "如果一人同时拥有管理、安全和审计全部权限，内部人员违规操作时无人监督、审计形同虚设；角色分离是等保对管理风险的基本控制要求。",
+   "expected": "（辅助参考）输出账号清单，供人工核对",
+   "mode": "人工核查",
+   "content": "管理账号清单及角色分工情况",
+   "commands": [
+    "awk -F: '$3>=1000{print $1\":\"$4}' /etc/passwd"
+   ],
+   "criteria": "（辅助参考）输出账号清单，供人工核对",
+   "manual_note": "系统管理员、安全管理员、安全审计员是否由不同人员担当需人工核查",
+   "id": "linux:12"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "c) 特权用户权限分离",
+   "desc": "检查是否存在独立的审计管理员账号",
+   "why": "若管理员同时掌握审计权限，攻击者或违规者可以先删审计记录再动手，事后无法追查，审计机制完全失效。",
+   "expected": "存在独立审计管理员账号，即具备条件",
+   "mode": "部分人工",
+   "content": "检查是否存在独立的审计管理员账号",
+   "commands": [
+    "getent group audit",
+    "awk -F: '$3>=1000{print $1}' /etc/passwd"
+   ],
+   "criteria": "存在独立审计管理员账号，即具备条件",
+   "manual_note": "审计账号与系统管理员权限互斥需人工确认",
+   "id": "linux:13"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "d) 默认帐户限制",
+   "desc": "检查 UID 0 默认管理员账号名称",
+   "why": "默认账户名和默认口令是公开信息（攻击者字典里都有），不改名不改口令等于把登录入口写在门口；来宾/guest 类账户是无口令访问的后门。",
+   "expected": "（辅助参考）输出默认管理员账号名",
+   "mode": "部分人工",
+   "content": "检查 UID 0 默认管理员账号名称",
+   "commands": [
+    "awk -F: '$3==0{print $1}' /etc/passwd"
+   ],
+   "criteria": "（辅助参考）输出默认管理员账号名",
+   "manual_note": "默认账户更名、来宾账户禁用情况需人工核对",
+   "id": "linux:14"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "e) 多余、过期账户",
+   "desc": "系统账号清单及账户状态",
+   "why": "离职人员、废弃项目的账户是潜伏后门——原账号口令仍有效，攻击者可能利用；共享账户无法定位具体操作人，审计失效。",
+   "expected": "（辅助参考）账号清单供与业务核对",
+   "mode": "人工核查",
+   "content": "系统账号清单及账户状态",
+   "commands": [
+    "awk -F: '{print $1, $7}' /etc/passwd",
+    "chage -l <用户名>"
+   ],
+   "criteria": "（辅助参考）账号清单供与业务核对",
+   "manual_note": "是否存在多余、过期、共享账户需与业务负责人人工核对确认",
+   "id": "linux:15"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "f) 重要信息资源敏感标记",
+   "desc": "检查系统是否具备强制访问控制能力（SELinux/AppArmor）",
+   "why": "没有敏感标记就无法区分哪些是敏感资源，也就无法实施差异化保护和优先级处置；敏感标记是细粒度访问控制的基础。",
+   "expected": "SELinux 非 disabled 或 AppArmor 可用，即具备能力",
+   "mode": "部分人工",
+   "content": "检查系统是否具备强制访问控制能力（SELinux/AppArmor）",
+   "commands": [
+    "getenforce",
+    "aa-status 2>/dev/null"
+   ],
+   "criteria": "SELinux 非 disabled 或 AppArmor 可用，即具备能力",
+   "manual_note": "是否对重要信息资源实际设置敏感标记需人工确认",
+   "id": "linux:16"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "g) 敏感标记操作控制",
+   "desc": "敏感标记分类与访问控制策略",
+   "why": "如果只打了标记但不控制访问，标记就形同虚设——需要与访问控制策略结合，确保高敏感资源只有授权用户可访问。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "敏感标记分类与访问控制策略",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "敏感标记分类方式、访问权限设定需人工核查确认",
+   "id": "linux:17"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "危险文件",
+   "desc": "检查危险信任文件（hosts.equiv、shosts.equiv、.rhosts、.shosts）是否存在",
+   "why": "这些文件定义了主机/用户间的免口令信任关系，r 命令（rlogin、rsh、rcp）会直接信任而不验证口令——是经典的无口令后门通道，攻击者写入这些文件即可免密登录。",
+   "expected": "输出为空（危险文件不存在），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查危险信任文件（hosts.equiv、shosts.equiv、.rhosts、.shosts）是否存在",
+   "commands": [
+    "ls -l /etc/hosts.equiv /etc/shosts.equiv 2>/dev/null",
+    "ls -l $HOME/.rhosts $HOME/.shosts 2>/dev/null"
+   ],
+   "criteria": "输出为空（危险文件不存在），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:18"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "敏感目录 S 标志位检查",
+   "desc": "检查 PATH 目录（/bin、/sbin、/usr/bin、/usr/sbin）中是否存在白名单以外的 setuid/setgid 文件",
+   "why": "setuid 程序会以属主身份（常见 root）运行，是提权攻击的核心工具；攻击者上传或利用可疑 setuid 程序即可获得 root 权限；白名单外的 S 标志位文件是重大隐患。",
+   "expected": "输出文件全部位于本行白名单内（无白名单外文件），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 PATH 目录（/bin、/sbin、/usr/bin、/usr/sbin）中是否存在白名单以外的 setuid/setgid 文件",
+   "commands": [
+    "find /bin /sbin /usr/bin /usr/sbin -xdev -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null"
+   ],
+   "criteria": "输出文件全部位于本行白名单内（无白名单外文件），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:19"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "用户目录 S 标志位检查",
+   "desc": "检查用户 home 目录中是否存在 setuid/setgid 文件",
+   "why": "用户目录对用户本人可写，如果里面出现 setuid 文件，很可能是攻击者预留的提权后门（放一个属主 root 的 setuid 程序，随时提权）。",
+   "expected": "输出为空（无 setuid/setgid 文件），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查用户 home 目录中是否存在 setuid/setgid 文件",
+   "commands": [
+    "find /home -xdev -type f \\( -perm -4000 -o -perm -2000 \\) 2>/dev/null"
+   ],
+   "criteria": "输出为空（无 setuid/setgid 文件），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:20"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "用户目录/文件所属检查",
+   "desc": "检查各用户 home 目录的属主是否与用户名一致",
+   "why": "属主错误会导致权限混乱：别人的目录变成你的、或者目录属主不是本人导致数据可被他人读写，也可能掩盖攻击者创建的目录（属主异常是入侵迹象之一）。",
+   "expected": "各 home 目录属主均与用户名一致，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查各用户 home 目录的属主是否与用户名一致",
+   "commands": [
+    "for u in $(awk -F: '$3>=1000{print $1}' /etc/passwd); do h=$(getent passwd \"$u\" | cut -d: -f6); [ -d \"$h\" ] && stat -c \"%n %U\" \"$h\"; done"
+   ],
+   "criteria": "各 home 目录属主均与用户名一致，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:21"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "用户目录设备文件检查",
+   "desc": "检查用户 home 目录中是否存在字符设备/块设备文件",
+   "why": "正常用户目录不应出现设备文件；出现设备文件说明存在异常（攻击者常用 mknod 创建设备文件作为后门入口或掩盖文件），是明显的入侵痕迹。",
+   "expected": "输出为空（无设备文件），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查用户 home 目录中是否存在字符设备/块设备文件",
+   "commands": [
+    "find /home -xdev \\( -type c -o -type b \\) 2>/dev/null"
+   ],
+   "criteria": "输出为空（无设备文件），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:22"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "其它（缺省账户/不可改变位/uid唯一性）",
+   "desc": "检查缺省账户是否清理、passwd/shadow/group/gshadow 是否设置不可改变位（i 位）、UID/GID 是否唯一",
+   "why": "缺省账户是攻击者的常用入侵入口；不可改变位防止关键账号文件被篡改；UID/GID 重复会导致权限归属混乱；passwd 注释字段含个人信息会被 finger 等工具泄露。",
+   "expected": "缺省账户无输出（或按业务保留）、四个账号文件均含 i 位、UID/GID 无重复，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查缺省账户是否清理、passwd/shadow/group/gshadow 是否设置不可改变位（i 位）、UID/GID 是否唯一",
+   "commands": [
+    "grep -E '^(adm|bin|daemon|lp|sync|shutdown|halt|news|uucp|operator|games|gopher|ftp):' /etc/passwd",
+    "lsattr /etc/passwd /etc/shadow /etc/group /etc/gshadow 2>/dev/null",
+    "awk -F: '{print $3}' /etc/passwd | sort | uniq -d",
+    "awk -F: '{print $3}' /etc/group | sort | uniq -d"
+   ],
+   "criteria": "缺省账户无输出（或按业务保留）、四个账号文件均含 i 位、UID/GID 无重复，即符合基线要求",
+   "manual_note": "passwd 注释字段是否含个人信息需人工核对",
+   "id": "linux:23"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "Crontab 只允许 root 添加",
+   "desc": "检查 crontab 命令的属主及 setuid/setgid 位",
+   "why": "如果 crontab 带 setuid 位，普通用户可借其以 root 权限操作计划任务，从而写入恶意定时任务实现提权持久化。",
+   "expected": "属主 root:root 且无 s 位（权限 -rwxr-xr-x），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 crontab 命令的属主及 setuid/setgid 位",
+   "commands": [
+    "ls -l /usr/bin/crontab"
+   ],
+   "criteria": "属主 root:root 且无 s 位（权限 -rwxr-xr-x），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:24"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "/etc/rc.d/init.d 权限",
+   "desc": "检查开机启动脚本目录 init.d 的属主与权限",
+   "why": "该目录存放开机启动脚本，开机时以 root 权限执行；如果任何人可写，攻击者写入恶意脚本即可在每次开机时自动执行恶意程序。",
+   "expected": "root root 755（仅 root 可写），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查开机启动脚本目录 init.d 的属主与权限",
+   "commands": [
+    "stat -c '%U %G %a' /etc/rc.d/init.d"
+   ],
+   "criteria": "root root 755（仅 root 可写），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:25"
+  },
+  {
+   "baseline": "linux",
+   "category": "二、访问控制",
+   "name": "umask",
+   "desc": "检查系统默认 umask 值是否为 027（或更严格）",
+   "why": "umask 过宽（如 000/002）时，用户随手创建的文件默认 666/664，人人可读写——敏感数据在“默认状态”下就裸露了；umask 收紧后即使创建者忘记设权限，文件也不会过度开放。",
+   "expected": "配置包含 umask 027（或更严 077）且当前值输出为 0027，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统默认 umask 值是否为 027（或更严格）",
+   "commands": [
+    "grep -E '^umask' /etc/profile /etc/profile.d/*.sh /etc/bashrc /etc/bash.bashrc 2>/dev/null",
+    "umask"
+   ],
+   "criteria": "配置包含 umask 027（或更严 077）且当前值输出为 0027，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:26"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "a) 审计范围（含：开启 audit 审计）",
+   "desc": "检查 auditd 审计服务是否启动且开机自启",
+   "why": "审计是事后追查的唯一依据；不开启审计，所有操作（登录、提权、改配置、删文件）都无记录，发生入侵后无法还原过程和定位责任人。",
+   "expected": "分别输出 active、enabled，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 auditd 审计服务是否启动且开机自启",
+   "commands": [
+    "systemctl is-active auditd",
+    "systemctl is-enabled auditd"
+   ],
+   "criteria": "分别输出 active、enabled，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:27"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "b) 审计内容",
+   "desc": "检查 auditd/rsyslog 进程是否运行、审计规则是否已加载",
+   "why": "审计范围不全等于留下盲区——攻击者优先利用的恰恰是“不审计”的操作（如修改审计策略、添加后门账号），漏记即无法追查。",
+   "expected": "auditd、rsyslog 进程均在运行且 auditctl -l 有规则输出，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 auditd/rsyslog 进程是否运行、审计规则是否已加载",
+   "commands": [
+    "ps -ef | grep -v grep | grep -E 'auditd|rsyslog'",
+    "auditctl -l 2>/dev/null"
+   ],
+   "criteria": "auditd、rsyslog 进程均在运行且 auditctl -l 有规则输出，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:28"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "c) 审计记录要素",
+   "desc": "检查审计配置是否存在、审计日志是否有记录",
+   "why": "要素不全的记录无法还原事件全貌：不知道谁在什么时间对什么对象做了什么、成没成功，记录就没有证据价值。",
+   "expected": "auditd.conf 存在且能查到审计记录，即具备条件",
+   "mode": "部分人工",
+   "content": "检查审计配置是否存在、审计日志是否有记录",
+   "commands": [
+    "cat /etc/audit/auditd.conf 2>/dev/null",
+    "ausearch -ts today -m USER_LOGIN 2>/dev/null | head -5"
+   ],
+   "criteria": "auditd.conf 存在且能查到审计记录，即具备条件",
+   "manual_note": "审计记录字段完整性（日期/时间/类型/主体/客体/结果）需人工核验",
+   "id": "linux:29"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "d) 审计报表",
+   "desc": "检查能否正常生成审计统计报表",
+   "why": "日志只有被分析才有价值；定期生成报表才能发现规律性异常（如频繁登录失败、非工作时间操作），报表也是向管理层汇报和测评备查的依据。",
+   "expected": "能正常输出审计报表，即具备能力",
+   "mode": "部分人工",
+   "content": "检查能否正常生成审计统计报表",
+   "commands": [
+    "aureport --summary 2>/dev/null"
+   ],
+   "criteria": "能正常输出审计报表，即具备能力",
+   "manual_note": "审计报表是否定期生成需人工确认",
+   "id": "linux:30"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "e) 审计进程保护",
+   "desc": "检查 auditd 审计进程是否在运行",
+   "why": "攻击者动手前最典型的动作就是先停审计进程、再删日志、再实施入侵；审计进程一旦可被随意停止，所有记录保护都失去意义。",
+   "expected": "auditd 进程在运行，即具备条件",
+   "mode": "部分人工",
+   "content": "检查 auditd 审计进程是否在运行",
+   "commands": [
+    "ps -ef | grep -v grep | grep auditd"
+   ],
+   "criteria": "auditd 进程在运行，即具备条件",
+   "manual_note": "审计进程的监控告警等保护措施需人工确认",
+   "id": "linux:31"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "f) 审计记录保护（含：日志文件权限、日志备份）",
+   "desc": "检查日志文件权限是否为 600（仅 root 可读写）、是否配置日志远程转发",
+   "why": "攻击者入侵后会删除/篡改本地日志掩盖痕迹；日志权限过宽也方便他人改写；只有异地存储（远程转发+备份）才能在主机被攻破后保留证据。",
+   "expected": "日志文件均显示 600 且 rsyslog 配置包含 @@ 远程转发地址，即符合基线要求",
+   "mode": "部分人工",
+   "content": "检查日志文件权限是否为 600（仅 root 可读写）、是否配置日志远程转发",
+   "commands": [
+    "ls -l /var/log/secure /var/run/utmp /var/log/wtmp /var/log/messages /var/log/btmp /var/log/cron /root/.bash_history 2>/dev/null",
+    "grep -E '^\\*\\.\\*' /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null"
+   ],
+   "criteria": "日志文件均显示 600 且 rsyslog 配置包含 @@ 远程转发地址，即符合基线要求",
+   "manual_note": "日志定期备份机制需人工确认",
+   "id": "linux:32"
+  },
+  {
+   "baseline": "linux",
+   "category": "三、安全审计",
+   "name": "审计历史记录",
+   "desc": "检查 shell 历史命令保存数量是否已设置限制",
+   "why": "命令行历史中常包含敏感信息（如 mysql -p密码、redis-cli -a 密码等）；无限保留的历史文件任何人拿到就能翻出大量明文口令和操作痕迹，限制保存数量可缩小泄露面。",
+   "expected": "HISTSIZE/HISTFILESIZE 已设置为有限值，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 shell 历史命令保存数量是否已设置限制",
+   "commands": [
+    "grep -E '^HISTSIZE|^HISTFILESIZE' /etc/profile 2>/dev/null",
+    "echo $HISTSIZE"
+   ],
+   "criteria": "HISTSIZE/HISTFILESIZE 已设置为有限值，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:33"
+  },
+  {
+   "baseline": "linux",
+   "category": "四、剩余信息保护",
+   "name": "a) 鉴别信息存储空间清除（banner 信息）",
+   "desc": "检查登录提示文件 /etc/issue、/etc/issue.net 是否包含系统版本等敏感信息",
+   "why": "登录 banner 会暴露系统类型和版本号，攻击者据此可直接按版本搜索对应漏洞发起定向攻击；清除版本信息提高攻击成本。",
+   "expected": "输出不含系统版本/内核等敏感信息（为空或自定义警示语），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查登录提示文件 /etc/issue、/etc/issue.net 是否包含系统版本等敏感信息",
+   "commands": [
+    "cat /etc/issue",
+    "cat /etc/issue.net"
+   ],
+   "criteria": "输出不含系统版本/内核等敏感信息（为空或自定义警示语），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:34"
+  },
+  {
+   "baseline": "linux",
+   "category": "四、剩余信息保护",
+   "name": "b) 存储空间清除",
+   "desc": "存储空间释放/再分配前的数据清除能力",
+   "why": "如果空间不清理，下一个使用者可能读到上一个用户残留的密码、文档等敏感数据（如 swap 中残留的明文口令）。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "存储空间释放/再分配前的数据清除能力",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "Linux 默认清除 swap 存储内容，需通过产品手册/测试报告人工核查确认",
+   "id": "linux:35"
+  },
+  {
+   "baseline": "linux",
+   "category": "五、入侵防范",
+   "name": "a) 入侵检测与报警（EDR）",
+   "desc": "检查主机安全防护（EDR）Agent 是否在运行",
+   "why": "发现不了入侵等于“被攻击了都不知道”——攻击者可能已潜伏数月，数据早已泄露；实时检测+报警才能第一时间发现并处置，缩短攻击者在系统内的停留时间。",
+   "expected": "Agent 进程在运行，即具备检测条件",
+   "mode": "部分人工",
+   "content": "检查主机安全防护（EDR）Agent 是否在运行",
+   "commands": [
+    "ps -ef | grep -iE 'agent|qing'"
+   ],
+   "criteria": "Agent 进程在运行，即具备检测条件",
+   "manual_note": "入侵告警通知机制需在 EDR 控制台人工确认",
+   "id": "linux:36"
+  },
+  {
+   "baseline": "linux",
+   "category": "五、入侵防范",
+   "name": "b) 重要程序完整性检测",
+   "desc": "完整性检测工具是否部署",
+   "why": "攻击者入侵后常篡改系统程序植入后门（如替换 sshd、ps、ls）；如果程序被篡改而不自知，等于后门常驻且所有基于该程序的检查都不可信。",
+   "expected": "（辅助参考）能定位到 tripwire 或已启用 EDR 文件管控",
+   "mode": "人工核查",
+   "content": "完整性检测工具是否部署",
+   "commands": [
+    "which tripwire 2>/dev/null"
+   ],
+   "criteria": "（辅助参考）能定位到 tripwire 或已启用 EDR 文件管控",
+   "manual_note": "完整性检测工具部署、策略配置与恢复措施需人工核查确认",
+   "id": "linux:37"
+  },
+  {
+   "baseline": "linux",
+   "category": "五、入侵防范",
+   "name": "c) 最小安装（含：端口服务过滤、其他服务安全）",
+   "desc": "检查危险端口是否有监听、危险服务（rpcbind/tftp/sendmail/finger）是否运行、是否存在明文服务进程",
+   "why": "每开放一个服务就多一个攻击面：一个老旧服务的一个漏洞就可能导致整机沦陷；服务越少、端口越少，可被攻击的入口越少。这是“减少暴露面”的核心原则。",
+   "expected": "危险端口无监听、rpcbind/tftp/sendmail/finger 输出均为 inactive、无明文服务进程，即符合基线要求",
+   "mode": "部分人工",
+   "content": "检查危险端口是否有监听、危险服务（rpcbind/tftp/sendmail/finger）是否运行、是否存在明文服务进程",
+   "commands": [
+    "systemctl list-units --type=service --state=running --no-pager 2>/dev/null",
+    "ss -tlnp 2>/dev/null | grep -E ':(7|11|15|23|69|111|161|177|512|513|514|515|540|2049|600[0-9])\\b'",
+    "systemctl is-active rpcbind tftp.socket sendmail finger.socket 2>/dev/null",
+    "ps -ef | grep -E 'rpc\\.(statd|ttdbserver|ypupdated)|telnetd|ftpd' | grep -v grep"
+   ],
+   "criteria": "危险端口无监听、rpcbind/tftp/sendmail/finger 输出均为 inactive、无明文服务进程，即符合基线要求",
+   "manual_note": "补丁升级机制（先测试再升级）需人工确认",
+   "id": "linux:38"
+  },
+  {
+   "baseline": "linux",
+   "category": "五、入侵防范",
+   "name": "关闭 ping 响应",
+   "desc": "检查系统是否禁止 ping 响应（icmp_echo_ignore_all 或 iptables 丢弃 icmp）",
+   "why": "主机不响应 ping，攻击者在扫描网络时更难发现这台机器，降低了被发现的概率（注意：同时也会影响合法的连通性探测，需按实际需要配置）。",
+   "expected": "icmp_echo_ignore_all 输出为 1 或 iptables 存在 icmp DROP 规则，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统是否禁止 ping 响应（icmp_echo_ignore_all 或 iptables 丢弃 icmp）",
+   "commands": [
+    "cat /proc/sys/net/ipv4/icmp_echo_ignore_all",
+    "iptables -L INPUT -n 2>/dev/null | grep -i icmp | grep -i drop"
+   ],
+   "criteria": "icmp_echo_ignore_all 输出为 1 或 iptables 存在 icmp DROP 规则，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:39"
+  },
+  {
+   "baseline": "linux",
+   "category": "五、入侵防范",
+   "name": "禁止 ip 源路径路由",
+   "desc": "检查是否已禁止 IP 源路径路由",
+   "why": "源路由选项允许发送方指定数据包经过的路由路径，攻击者可借此绕过防火墙过滤规则，甚至劫持和嗅探会话流量。",
+   "expected": "输出均为 0，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否已禁止 IP 源路径路由",
+   "commands": [
+    "sysctl -n net.ipv4.conf.all.accept_source_route",
+    "cat /proc/sys/net/ipv4/conf/*/accept_source_route"
+   ],
+   "criteria": "输出均为 0，即符合基线要求",
+   "manual_note": "",
+   "id": "linux:40"
+  },
+  {
+   "baseline": "linux",
+   "category": "六、恶意代码防范",
+   "name": "a) 防恶意代码软件",
+   "desc": "检查防恶意代码（EDR 病毒查杀）Agent 是否在运行",
+   "why": "没有杀毒软件或病毒库长期不更新，木马、挖矿、勒索软件等恶意程序可以在主机上随意落地执行，失去最后一道防线。",
+   "expected": "Agent 进程在运行，即具备查杀条件",
+   "mode": "部分人工",
+   "content": "检查防恶意代码（EDR 病毒查杀）Agent 是否在运行",
+   "commands": [
+    "ps -ef | grep -iE 'agent|qing'"
+   ],
+   "criteria": "Agent 进程在运行，即具备查杀条件",
+   "manual_note": "病毒库更新是否及时需在 EDR 控制台人工核查",
+   "id": "linux:41"
+  },
+  {
+   "baseline": "linux",
+   "category": "六、恶意代码防范",
+   "name": "b) 主机与网络恶意代码库不同",
+   "desc": "主机侧与网络侧防恶意代码产品病毒库来源",
+   "why": "如果全网使用同一套病毒库，该厂商漏报的病毒在全网都漏报——“一损俱损”；异构病毒库可以互补，提高整体检出率。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "主机侧与网络侧防恶意代码产品病毒库来源",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需人工核查网络侧与主机侧病毒库是否不同厂商/不同病毒库",
+   "id": "linux:42"
+  },
+  {
+   "baseline": "linux",
+   "category": "六、恶意代码防范",
+   "name": "c) 防恶意代码统一管理",
+   "desc": "防恶意代码统一管理、统一升级情况",
+   "why": "分散管理容易出现“漏网之鱼”（有的主机没升级、没部署）；统一管理保证全部主机的策略和病毒库一致，覆盖完整。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "防恶意代码统一管理、统一升级情况",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需在 EDR 控制台人工确认统一策略、统一升级管理",
+   "id": "linux:43"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "a) 终端接入限制（含：限制 ip 登陆、Root 仅控制台）",
+   "desc": "检查终端登录来源限制：hosts.deny/hosts.allow 访问控制、SSH 登录用户限制、securetty 控制台限制",
+   "why": "如果不限制来源，任何 IP 地址都能尝试登录，爆破面全开放；限制来源后只有内网/管理网段的运维人员能连，攻击面大幅收窄。",
+   "expected": "hosts.deny 含 sshd: ALL 等限制、hosts.allow 含内网网段、AllowUsers/AllowGroups 已配置、securetty 仅 console/vc/x/tty，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查终端登录来源限制：hosts.deny/hosts.allow 访问控制、SSH 登录用户限制、securetty 控制台限制",
+   "commands": [
+    "cat /etc/hosts.deny",
+    "cat /etc/hosts.allow",
+    "sshd -T 2>/dev/null | grep -iE 'allowusers|allowgroups'",
+    "cat /etc/securetty"
+   ],
+   "criteria": "hosts.deny 含 sshd: ALL 等限制、hosts.allow 含内网网段、AllowUsers/AllowGroups 已配置、securetty 仅 console/vc/x/tty，即符合基线要求",
+   "manual_note": "堡垒机策略等补充限制手段需人工确认",
+   "id": "linux:44"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "b) 登录超时锁定（含：TMOUT）",
+   "desc": "检查登录会话空闲超时 TMOUT 是否已设置",
+   "why": "运维人员离开后终端仍处于已登录状态，任何路过的人都可以直接利用该会话操作服务器；空闲自动退出可切断这个利用窗口。",
+   "expected": "输出包含 TMOUT=400（或 600 等合理值），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查登录会话空闲超时 TMOUT 是否已设置",
+   "commands": [
+    "grep -E '^export TMOUT|^TMOUT' /etc/profile 2>/dev/null"
+   ],
+   "criteria": "输出包含 TMOUT=400（或 600 等合理值），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:45"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "c) 资源使用监视",
+   "desc": "资源监视平台部署情况",
+   "why": "资源异常往往是入侵或故障的早期信号：CPU 飙高可能是挖矿木马、磁盘写满可能是日志风暴或数据泄露、网络异常可能是外传数据；及时发现才能及时处置。",
+   "expected": "（辅助参考）监控进程在运行",
+   "mode": "人工核查",
+   "content": "资源监视平台部署情况",
+   "commands": [
+    "ps -ef | grep -iE 'zabbix|agent' | grep -v grep"
+   ],
+   "criteria": "（辅助参考）监控进程在运行",
+   "manual_note": "CPU/内存/磁盘/网络监视是否覆盖重要服务器需人工确认",
+   "id": "linux:46"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "d) 单个用户资源限制",
+   "desc": "检查 /etc/security/limits.conf 是否已配置单用户资源限制参数",
+   "why": "单个用户可耗尽系统全部资源（如 fork 炸弹、恶意脚本开海量进程），导致整机瘫痪；资源限额可在源头限制破坏范围。",
+   "expected": "limits.conf 存在已生效的资源限制配置（非纯注释），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 /etc/security/limits.conf 是否已配置单用户资源限制参数",
+   "commands": [
+    "cat /etc/security/limits.conf 2>/dev/null",
+    "ulimit -n"
+   ],
+   "criteria": "limits.conf 存在已生效的资源限制配置（非纯注释），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:47"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "e) 服务水平检测与报警",
+   "desc": "监控平台服务水平检测与告警能力",
+   "why": "服务异常而无人知晓=业务中断无人响应；主动告警才能保证第一时间介入处置，将影响降到最低。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "监控平台服务水平检测与告警能力",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需人工确认监控平台具备声/光/短信/邮件等告警方式且已配置通知渠道",
+   "id": "linux:48"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "配置安全的 dns 服务器",
+   "desc": "检查系统 DNS 服务器配置",
+   "why": "DNS 被劫持后，所有域名解析都会被指向攻击者的钓鱼/恶意站点——用户访问的“官网”其实是陷阱；使用可信 DNS 是防止域名劫持的基础。",
+   "expected": "nameserver 为企业可信 DNS 地址（对照企业 DNS 清单），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统 DNS 服务器配置",
+   "commands": [
+    "cat /etc/resolv.conf"
+   ],
+   "criteria": "nameserver 为企业可信 DNS 地址（对照企业 DNS 清单），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:49"
+  },
+  {
+   "baseline": "linux",
+   "category": "七、资源控制",
+   "name": "禁用使用控制台程序",
+   "desc": "检查 /etc/security/console.apps 目录是否为空或不存在",
+   "why": "该目录存放控制台程序（ConsoleHelper）授权配置，可控制哪些程序能在控制台运行；删除可防止未经授权的控制台程序被调用。",
+   "expected": "无输出（目录不存在或为空），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 /etc/security/console.apps 目录是否为空或不存在",
+   "commands": [
+    "ls /etc/security/console.apps/ 2>/dev/null"
+   ],
+   "criteria": "无输出（目录不存在或为空），即符合基线要求",
+   "manual_note": "",
+   "id": "linux:50"
+  }
+ ],
+ "windows": [
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "a) 身份标识和鉴别（禁止空密码登录）",
+   "desc": "检查系统中是否存在空口令账户、Guest 来宾账户是否禁用，以及登录是否必须输入用户名和口令",
+   "why": "空口令账户等于大门没上锁——任何人无需密码即可直接登录系统，是最严重的基础漏洞之一；Guest 来宾账户是无凭证访问的后门入口，攻击者扫描到即可瞬间拿下机器。",
+   "expected": "无空口令账户、Guest 账户已禁用，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统中是否存在空口令账户、Guest 来宾账户是否禁用，以及登录是否必须输入用户名和口令",
+   "commands": [
+    "net user",
+    "Get-LocalUser | Select-Object Name,Enabled,PasswordRequired"
+   ],
+   "criteria": "所有启用账户 PasswordRequired=True、Guest 账户已禁用，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:1"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "b) 口令复杂度与更换（含：密码策略）",
+   "desc": "检查密码策略是否配置：密码长度最小值、复杂度要求、最长使用期限、历史密码保留数量",
+   "why": "弱口令（短、纯数字、常见词）是暴力破解和撞库攻击的首要突破口，历史上大量服务器失陷源于弱口令；口令长期不更换，一旦泄露便永久有效；限制历史口令重用可让已泄露的口令迅速失效。",
+   "expected": "密码长度≥8、启用复杂度、最长使用期限≤90 天、历史保留≥5 次，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查密码策略是否配置：密码长度最小值、复杂度要求、最长使用期限、历史密码保留数量",
+   "commands": [
+    "net accounts",
+    "secedit /export /cfg C:\\Windows\\Temp\\secpol.cfg",
+    "findstr /i \"PasswordComplexity MinimumPasswordLength MaximumPasswordAge PasswordHistorySize\" C:\\Windows\\Temp\\secpol.cfg"
+   ],
+   "criteria": "密码长度最小值≥8、密码最长使用期限≤90 天、保留密码历史≥5 个、PasswordComplexity=1，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:2"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "c) 登录失败处理（含：账户锁定策略）",
+   "desc": "检查登录认证配置中是否启用账户锁定策略（锁定阈值、锁定时长、计数器重置时间）",
+   "why": "如果不限制失败次数，攻击者可以对口令进行无限次猜测（暴力破解、密码喷洒），口令再复杂也有被撞破的可能；锁定策略让自动化破解工具寸步难行。",
+   "expected": "锁定阈值≤5 次、锁定时间≥30 分钟、计数器重置≥30 分钟，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查登录认证配置中是否启用账户锁定策略（锁定阈值、锁定时长、计数器重置时间）",
+   "commands": [
+    "net accounts"
+   ],
+   "criteria": "锁定阈值≤5 次、锁定持续时间≥30 分钟、锁定观察窗口≥30 分钟，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:3"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "d) 远程管理加密（含：RDP 加密、禁止明文服务）",
+   "desc": "检查远程桌面是否启用强加密与网络级身份验证（NLA），以及是否存在 Telnet 等明文管理服务监听",
+   "why": "Telnet、FTP 等明文协议传输时，用户名和口令可以被抓包工具直接截获；RDP 低加密级别存在会话被窃听、中间人攻击的风险，启用网络级身份验证（NLA）可在建立会话前阻断未授权连接。",
+   "expected": "RDP 加密级别=高、启用 NLA、无 23 端口监听，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查远程桌面是否启用强加密与网络级身份验证（NLA），以及是否存在 Telnet 等明文管理服务监听",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' | Select-Object MinEncryptionLevel,SecurityLayer,UserAuthentication",
+    "Get-Service Telnet,TlntSvr -ErrorAction SilentlyContinue",
+    "Get-NetTCPConnection -LocalPort 23 -State Listen -ErrorAction SilentlyContinue"
+   ],
+   "criteria": "MinEncryptionLevel=3（高）、UserAuthentication=1（启用 NLA）、Telnet 服务已禁用且无 23 端口监听，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:4"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "e) 用户名唯一性",
+   "desc": "检查本地账户名称与 SID 是否存在重复",
+   "why": "多人共用一个账号时，所有操作无法区分是谁做的，审计追溯失效；SID 是系统识别账户的唯一标识，SID 异常（重复、克隆）通常意味着隐藏账号或后门。",
+   "expected": "用户名与 SID 均无重复输出，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查本地账户名称与 SID 是否存在重复",
+   "commands": [
+    "Get-LocalUser | Select-Object Name,SID",
+    "Get-LocalUser | Group-Object SID | Where-Object Count -gt 1 | Select-Object Name,Count"
+   ],
+   "criteria": "用户名与 SID 均无重复输出，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:5"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "f) 双因素鉴别（含：动态口令验证）",
+   "desc": "检查系统是否配置双因素/动态口令认证（智能卡、RADIUS、OTP）",
+   "why": "仅靠单一口令时，口令一旦泄露（钓鱼、键盘记录、撞库）攻击者即可直接登录；双因素认证即使口令泄露，没有第二因素依然无法进入。",
+   "expected": "已启用智能卡登录或集成双因素认证，即具备条件",
+   "mode": "部分人工",
+   "content": "检查系统是否配置双因素/动态口令认证（智能卡、RADIUS、OTP）",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object ScForceOption",
+    "Get-Service -DisplayName '*RADIUS*' -ErrorAction SilentlyContinue"
+   ],
+   "criteria": "ScForceOption=1 或已集成双因素认证产品，即具备条件",
+   "manual_note": "实际启用的双因素认证方式及覆盖范围需询问管理员确认",
+   "id": "windows:6"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "g) 管理账户安全（含：默认账户重命名/禁用）",
+   "desc": "检查内置管理员账户（RID=500）是否已重命名或禁用，是否存在“密码永不过期”账户",
+   "why": "Administrator 是每台 Windows 的默认账户名，攻击者字典里都有，直接针对它爆破；“密码永不过期”违背定期更换口令的基线要求，口令泄露后永久有效。",
+   "expected": "Administrator 已重命名或禁用、无密码永不过期账户，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查内置管理员账户（RID=500）是否已重命名或禁用，是否存在“密码永不过期”账户",
+   "commands": [
+    "Get-LocalUser | Select-Object Name,Enabled,PasswordNeverExpires",
+    "Get-CimInstance Win32_UserAccount -Filter \"SID LIKE '%-500'\" | Select-Object Name,SID,Disabled"
+   ],
+   "criteria": "RID=500 内置账户已重命名或禁用、所有账户 PasswordNeverExpires=False，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:7"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "h) 管理员组最小化（确保管理员仅授权账号）",
+   "desc": "检查 Administrators 组成员是否最小化（仅授权管理账号）",
+   "why": "管理员组的每个成员都拥有系统完全控制权；出现未授权成员通常意味着攻击者植入的后门账号或管理失误，等于系统里多了一个隐形超级管理员，且可能绕过审计监控。",
+   "expected": "管理员组成员均为经授权的管理账号，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 Administrators 组成员是否最小化（仅授权管理账号）",
+   "commands": [
+    "net localgroup administrators",
+    "Get-LocalGroupMember -Group Administrators | Select-Object Name,ObjectClass"
+   ],
+   "criteria": "输出均为经授权的管理账号，无陌生/异常账户，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:8"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "i) 禁止默认管理员远程登录",
+   "desc": "检查是否限制 Administrator/管理账号通过远程桌面登录",
+   "why": "管理账户是爆破攻击的首选目标；禁止其远程登录后，即使口令被猜中攻击者也无法从网络进入；配合普通账号+提权的方式，每一次提权都有审计记录可追溯。",
+   "expected": "“拒绝通过远程桌面服务登录”包含 Administrator（或管理账号），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否限制 Administrator/管理账号通过远程桌面登录",
+   "commands": [
+    "secedit /export /cfg C:\\Windows\\Temp\\secpol.cfg",
+    "findstr /i \"SeDenyRemoteInteractiveLogonRight\" C:\\Windows\\Temp\\secpol.cfg"
+   ],
+   "criteria": "SeDenyRemoteInteractiveLogonRight 包含 Administrator（或管理员账户），即符合基线要求",
+   "manual_note": "",
+   "id": "windows:9"
+  },
+  {
+   "baseline": "windows",
+   "category": "一、身份鉴别",
+   "name": "j) 修改 RDP 默认端口",
+   "desc": "检查远程桌面服务监听端口是否为非默认端口（非 3389）",
+   "why": "3389 端口是全球扫描器的固定探测目标，几乎全天候被扫描和爆破；修改默认端口后，自动化攻击的命中率大幅下降（注意：属于“隐蔽安全”手段，不能替代口令和漏洞防护）。",
+   "expected": "RDP 端口不等于 3389，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查远程桌面服务监听端口是否为非默认端口（非 3389）",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\RDP-Tcp' | Select-Object PortNumber",
+    "Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue"
+   ],
+   "criteria": "PortNumber 不等于 3389 且无 3389 端口监听，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:10"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "a) 访问控制功能（含：敏感文件权限）",
+   "desc": "检查敏感文件/目录（config 目录、SAM、hosts、win.ini 等）的 ACL 是否仅授权系统与管理员访问",
+   "why": "关键文件权限过宽时，普通用户可以读取（泄露账户结构、口令哈希）甚至写入（直接篡改账号、植入后门）；SAM 文件一旦泄露，所有本地口令哈希暴露，可被离线爆破。",
+   "expected": "敏感文件仅 SYSTEM、Administrators 可完全控制，普通用户无写权限，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查敏感文件/目录（config 目录、SAM、hosts、win.ini 等）的 ACL 是否仅授权系统与管理员访问",
+   "commands": [
+    "icacls C:\\Windows\\System32\\config",
+    "icacls C:\\Windows\\System32\\config\\SAM",
+    "icacls C:\\Windows\\System32\\drivers\\etc\\hosts",
+    "icacls C:\\Windows\\win.ini"
+   ],
+   "criteria": "输出仅含 SYSTEM、Administrators 完全控制权限，无 Everyone/Users 写权限，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:11"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "b) 管理用户角色权限分离",
+   "desc": "管理账号清单及角色分工情况",
+   "why": "如果一人同时拥有管理、安全和审计全部权限，内部人员违规操作时无人监督、审计形同虚设；角色分离是等保对管理风险的基本控制要求。",
+   "expected": "（辅助参考）输出账号清单，供人工核对",
+   "mode": "人工核查",
+   "content": "管理账号清单及角色分工情况",
+   "commands": [
+    "net localgroup administrators"
+   ],
+   "criteria": "（辅助参考）输出账号清单，供人工核对",
+   "manual_note": "系统管理员、安全管理员、安全审计员是否由不同人员担当需人工核查",
+   "id": "windows:12"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "c) 特权用户权限分离",
+   "desc": "检查是否存在独立的审计管理员账号",
+   "why": "若管理员同时掌握审计权限，攻击者或违规者可以先删审计记录再动手，事后无法追查，审计机制完全失效。",
+   "expected": "存在独立审计管理员账号，即具备条件",
+   "mode": "部分人工",
+   "content": "检查是否存在独立的审计管理员账号",
+   "commands": [
+    "Get-LocalGroupMember -Group Administrators | Select-Object Name"
+   ],
+   "criteria": "存在独立审计管理员账号，即具备条件",
+   "manual_note": "审计账号与系统管理员权限互斥需人工确认",
+   "id": "windows:13"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "d) 默认帐户限制",
+   "desc": "检查 Guest 来宾账户状态及内置管理员账户名称",
+   "why": "默认账户名和默认口令是公开信息（攻击者字典里都有），不改名不改口令等于把登录入口写在门口；来宾/guest 类账户是无口令访问的后门。",
+   "expected": "（辅助参考）输出默认账户状态",
+   "mode": "部分人工",
+   "content": "检查 Guest 来宾账户状态及内置管理员账户名称",
+   "commands": [
+    "Get-LocalUser | Select-Object Name,Enabled",
+    "Get-CimInstance Win32_UserAccount | Where-Object { $_.Name -match 'Guest|Administrator' } | Select-Object Name,Disabled"
+   ],
+   "criteria": "（辅助参考）输出默认账户状态",
+   "manual_note": "默认账户更名、来宾账户禁用情况需人工核对",
+   "id": "windows:14"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "e) 多余、过期账户",
+   "desc": "系统账号清单及账户状态",
+   "why": "离职人员、废弃项目的账户是潜伏后门——原账号口令仍有效，攻击者可能利用；共享账户无法定位具体操作人，审计失效。",
+   "expected": "（辅助参考）账号清单供与业务核对",
+   "mode": "人工核查",
+   "content": "系统账号清单及账户状态",
+   "commands": [
+    "Get-LocalUser | Select-Object Name,Enabled,LastLogon"
+   ],
+   "criteria": "（辅助参考）账号清单供与业务核对",
+   "manual_note": "是否存在多余、过期、共享账户需与业务负责人人工核对确认",
+   "id": "windows:15"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "f) 重要信息资源敏感标记",
+   "desc": "检查系统是否对重要信息资源实施分类标记与差异化保护",
+   "why": "没有敏感标记就无法区分哪些是敏感资源，也就无法实施差异化保护和优先级处置；敏感标记是细粒度访问控制的基础。",
+   "expected": "（辅助参考）输出敏感资源的访问控制配置",
+   "mode": "部分人工",
+   "content": "检查系统是否对重要信息资源实施分类标记与差异化保护",
+   "commands": [
+    "Get-Acl C:\\ | Format-List"
+   ],
+   "criteria": "（辅助参考）输出敏感资源的访问控制配置",
+   "manual_note": "是否对重要信息资源实际设置敏感标记需人工确认",
+   "id": "windows:16"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "g) 敏感标记操作控制",
+   "desc": "敏感标记分类与访问控制策略",
+   "why": "如果只打了标记但不控制访问，标记就形同虚设——需要与访问控制策略结合，确保高敏感资源只有授权用户可访问。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "敏感标记分类与访问控制策略",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "敏感标记分类方式、访问权限设定需人工核查确认",
+   "id": "windows:17"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "h) 共享目录权限（含：默认共享）",
+   "desc": "检查系统共享目录（含默认共享）是否关闭或权限最小化",
+   "why": "开放共享等于把目录（甚至整盘）暴露给内网所有人；默认共享（C$、ADMIN$）是勒索软件和横向渗透工具的经典入口，利用管理员凭据即可全网扩散。",
+   "expected": "非必要共享已删除、默认共享已关闭、共享权限不含 Everyone 完全控制，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统共享目录（含默认共享）是否关闭或权限最小化",
+   "commands": [
+    "net share",
+    "Get-SmbShare | Select-Object Name,Path",
+    "Get-SmbServerConfiguration | Select-Object AutoShareServer,AutoShareWks"
+   ],
+   "criteria": "无非必要共享、AutoShareServer/AutoShareWks=False，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:18"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "i) 用户目录权限检查",
+   "desc": "检查各用户 Profile 目录的 ACL 是否仅本人与管理员可访问",
+   "why": "目录属主/权限错误会导致越权访问：浏览器保存的密码、脚本中的明文凭据、业务数据都可能被他人读取；异常权限也可能掩盖攻击者创建的目录（入侵迹象之一）。",
+   "expected": "用户目录仅本人、SYSTEM、Administrators 可访问，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查各用户 Profile 目录的 ACL 是否仅本人与管理员可访问",
+   "commands": [
+    "Get-ChildItem C:\\Users -Directory | Select-Object -ExpandProperty FullName",
+    "icacls C:\\Users\\<用户名>"
+   ],
+   "criteria": "用户目录仅本人、SYSTEM、Administrators 具有访问权限，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:19"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "j) 匿名访问限制（含：空会话、匿名枚举）",
+   "desc": "检查是否限制匿名用户枚举 SAM 账户与共享、限制空会话访问命名管道",
+   "why": "允许匿名枚举时，攻击者无需凭据即可拿到完整账户/共享清单，为后续爆破和横向移动铺路；空会话（null session）是经典的信息泄露通道。",
+   "expected": "RestrictAnonymous=1、RestrictAnonymousSAM=1、RestrictNullSessAccess=1，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否限制匿名用户枚举 SAM 账户与共享、限制空会话访问命名管道",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object RestrictAnonymous,RestrictAnonymousSAM,RestrictNullSessAccess"
+   ],
+   "criteria": "RestrictAnonymous=1、RestrictAnonymousSAM=1、RestrictNullSessAccess=1，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:20"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "k) UAC 用户账户控制",
+   "desc": "检查用户账户控制（UAC）是否启用，管理员操作是否需要批准",
+   "why": "UAC 让程序无法静默提权——即使用户误运行恶意程序，没有用户确认也无法获得管理员权限，是阻止静默提权的关键屏障。",
+   "expected": "EnableLUA=1 且管理员批准模式开启，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查用户账户控制（UAC）是否启用，管理员操作是否需要批准",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object EnableLUA,ConsentPromptBehaviorAdmin,PromptOnSecureDesktop"
+   ],
+   "criteria": "EnableLUA=1 且 ConsentPromptBehaviorAdmin 非 0，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:21"
+  },
+  {
+   "baseline": "windows",
+   "category": "二、访问控制",
+   "name": "l) 自动播放禁用（AutoRun）",
+   "desc": "检查自动播放/AutoRun 功能是否已禁用（禁止所有驱动器）",
+   "why": "U 盘插入自动运行是经典的病毒传播方式（震网病毒即利用此机制）；禁用 AutoRun 后恶意程序无法借插入介质自动执行。",
+   "expected": "NoDriveTypeAutoRun=0xFF（关闭所有驱动器），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查自动播放/AutoRun 功能是否已禁用（禁止所有驱动器）",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' | Select-Object NoDriveTypeAutoRun",
+    "Get-ItemProperty 'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer' | Select-Object NoDriveTypeAutoRun"
+   ],
+   "criteria": "NoDriveTypeAutoRun=255（0xFF，关闭所有驱动器），即符合基线要求",
+   "manual_note": "",
+   "id": "windows:22"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "a) 审计范围（含：审计策略覆盖）",
+   "desc": "检查审计策略是否覆盖登录、账户管理、策略更改、特权使用等关键类别（含成功和失败）",
+   "why": "审计是事后追查的唯一依据；审计范围不全等于留下盲区——攻击者优先利用的恰恰是“不审计”的操作（修改审计策略、添加后门账号），漏记即无法追查。",
+   "expected": "登录/注销、账户管理、策略更改、特权使用等类别均启用成功+失败审计，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查审计策略是否覆盖登录、账户管理、策略更改、特权使用等关键类别（含成功和失败）",
+   "commands": [
+    "auditpol /get /category:*（需以管理员身份运行）"
+   ],
+   "criteria": "登录/注销、账户管理、策略更改、特权使用等关键类别均开启成功与失败审计，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:23"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "b) 审计内容（含：安全日志配置）",
+   "desc": "检查安全日志大小、保留方式（不覆盖）是否符合要求",
+   "why": "日志容量不足时旧记录被自动覆盖，“按需要覆盖”策略会让攻击者用日志洪水冲掉自己的痕迹，关键记录在取证前就已经消失。",
+   "expected": "Security 日志容量充足且留存策略满足≥6 个月，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查安全日志大小、保留方式（不覆盖）是否符合要求",
+   "commands": [
+    "wevtutil gl Security"
+   ],
+   "criteria": "maxSize≥196608（192MB，微软基线推荐值）且留存策略满足≥6 个月，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:24"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "c) 审计记录要素",
+   "desc": "检查审计记录是否包含事件要素：日期/时间、类型、主体、客体、结果",
+   "why": "要素不全的记录无法还原事件全貌：不知道谁在什么时间对什么对象做了什么、成没成功，记录就没有证据价值。",
+   "expected": "安全日志事件包含完整要素，即具备条件",
+   "mode": "部分人工",
+   "content": "检查审计记录是否包含事件要素：日期/时间、类型、主体、客体、结果",
+   "commands": [
+    "Get-WinEvent -LogName Security -MaxEvents 5 | Select-Object TimeCreated,Id,ProviderName"
+   ],
+   "criteria": "事件包含时间、主体、对象、结果等要素，即具备条件",
+   "manual_note": "审计记录字段完整性（日期/时间/类型/主体/客体/结果）需人工核验",
+   "id": "windows:25"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "d) 审计报表",
+   "desc": "检查能否正常生成/导出审计统计报表",
+   "why": "日志只有被分析才有价值；定期生成报表才能发现规律性异常（如频繁登录失败、非工作时间操作），报表也是向管理层汇报和测评备查的依据。",
+   "expected": "能正常导出/汇总安全日志，即具备能力",
+   "mode": "部分人工",
+   "content": "检查能否正常生成/导出审计统计报表",
+   "commands": [
+    "wevtutil qe Security /c:20 /rd:true /f:text"
+   ],
+   "criteria": "能正常导出/汇总安全日志，即具备能力",
+   "manual_note": "审计报表是否定期生成需人工确认",
+   "id": "windows:26"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "e) 审计进程保护",
+   "desc": "检查事件日志服务运行状态，以及“无法记录安全审计时立即关闭系统”策略",
+   "why": "攻击者动手前最典型的动作就是先停日志服务、再删日志、再实施入侵；审计进程一旦可被随意停止，所有记录保护都失去意义。",
+   "expected": "EventLog 服务运行且自启，审计保护策略已按业务需要配置，即具备条件",
+   "mode": "部分人工",
+   "content": "检查事件日志服务运行状态，以及“无法记录安全审计时立即关闭系统”策略",
+   "commands": [
+    "Get-Service EventLog | Select-Object Name,Status,StartType",
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Lsa' | Select-Object CrashOnAuditFail"
+   ],
+   "criteria": "EventLog 服务 Running、启动类型 Automatic 且审计保护策略已按业务需要配置，即具备条件",
+   "manual_note": "审计服务的监控告警等保护措施需人工确认",
+   "id": "windows:27"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "f) 审计记录保护（含：日志文件权限、日志备份）",
+   "desc": "检查日志文件权限、是否配置日志转发或集中收集",
+   "why": "攻击者入侵后会删除/篡改本地日志掩盖痕迹；日志权限过宽也方便他人改写；只有异地存储（远程转发+备份）才能在主机被攻破后保留证据。",
+   "expected": "日志目录仅 SYSTEM/Administrators 可访问且已配置转发或备份，即符合基线要求",
+   "mode": "部分人工",
+   "content": "检查日志文件权限、是否配置日志转发或集中收集",
+   "commands": [
+    "icacls C:\\Windows\\System32\\winevt\\Logs",
+    "Get-Service Wecsvc -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType"
+   ],
+   "criteria": "日志目录仅 SYSTEM、Administrators 可访问且已配置转发/备份机制，即符合基线要求",
+   "manual_note": "日志远程转发与定期备份机制需人工确认",
+   "id": "windows:28"
+  },
+  {
+   "baseline": "windows",
+   "category": "三、安全审计",
+   "name": "g) PowerShell 操作审计",
+   "desc": "检查是否启用 PowerShell 脚本块日志/模块日志（记录命令行与脚本内容）",
+   "why": "攻击者常使用 PowerShell 无文件攻击（下载执行、内存加载），传统记录只见“powershell.exe”而不见执行内容；脚本块日志把执行的代码全文留痕，让无文件攻击现形。",
+   "expected": "EnableScriptBlockLogging=1，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否启用 PowerShell 脚本块日志/模块日志（记录命令行与脚本内容）",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging' -ErrorAction SilentlyContinue | Select-Object EnableScriptBlockLogging",
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging' -ErrorAction SilentlyContinue | Select-Object EnableModuleLogging"
+   ],
+   "criteria": "EnableScriptBlockLogging=1（或通过 EDR 等具备等效审计能力），即符合基线要求",
+   "manual_note": "",
+   "id": "windows:29"
+  },
+  {
+   "baseline": "windows",
+   "category": "四、剩余信息保护",
+   "name": "a) 鉴别信息存储空间清除（含：内存页面文件、登录痕迹）",
+   "desc": "检查关机时是否清除虚拟内存页面文件、登录界面是否不显示最后登录用户名",
+   "why": "页面文件可能残留明文口令、密钥等敏感数据，下一个使用者或攻击者可读取；登录界面显示最后登录用户名会向攻击者泄露有效账户名，降低其爆破成本。",
+   "expected": "ClearPageFileAtShutdown=1、DontDisplayLastUserName=1，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查关机时是否清除虚拟内存页面文件、登录界面是否不显示最后登录用户名",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management' | Select-Object ClearPageFileAtShutdown",
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' | Select-Object DontDisplayLastUserName"
+   ],
+   "criteria": "ClearPageFileAtShutdown=1、DontDisplayLastUserName=1，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:30"
+  },
+  {
+   "baseline": "windows",
+   "category": "四、剩余信息保护",
+   "name": "b) 存储空间清除",
+   "desc": "存储空间释放/再分配前的数据清除能力（磁盘加密、擦除）",
+   "why": "磁盘/分区重新分配时如果不清理，下一个使用者可能读到上一个用户残留的密码、文档等敏感数据；磁盘加密保证设备丢失、报废时数据不被读出。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "存储空间释放/再分配前的数据清除能力（磁盘加密、擦除）",
+   "commands": [
+    "无（本项无法用命令自动检查）",
+    "参考命令：Get-BitLockerVolume -ErrorAction SilentlyContinue | Select-Object MountPoint,VolumeStatus,ProtectionStatus"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "存储介质擦除与加密策略需通过产品手册/管理制度人工核查确认",
+   "id": "windows:31"
+  },
+  {
+   "baseline": "windows",
+   "category": "四、剩余信息保护",
+   "name": "c) 内存转储保护",
+   "desc": "检查系统崩溃转储配置及转储文件权限",
+   "why": "内存转储文件包含崩溃瞬间的全部内存数据（可能含明文口令、密钥）；转储文件权限过宽会成为凭据泄露渠道，应禁用或严格限制访问。",
+   "expected": "已禁用转储或转储文件仅管理员可读，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统崩溃转储配置及转储文件权限",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\CrashControl' | Select-Object CrashDumpEnabled,DumpFile",
+    "icacls C:\\Windows\\Minidump -ErrorAction SilentlyContinue"
+   ],
+   "criteria": "CrashDumpEnabled=0（已禁用）或转储文件仅 Administrators 可读，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:32"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "a) 入侵检测与报警（EDR）",
+   "desc": "检查主机安全防护（EDR/HIDS）Agent 是否在运行",
+   "why": "发现不了入侵等于“被攻击了都不知道”——攻击者可能已潜伏数月，数据早已泄露；实时检测+报警才能第一时间发现并处置，缩短攻击者在系统内的停留时间。",
+   "expected": "Agent 进程在运行，即具备检测条件",
+   "mode": "部分人工",
+   "content": "检查主机安全防护（EDR/HIDS）Agent 是否在运行",
+   "commands": [
+    "Get-Process | Where-Object { $_.ProcessName -match 'agent|edr|qingteng' } | Select-Object ProcessName,Id"
+   ],
+   "criteria": "EDR/主机防护 Agent 进程在运行，即具备检测条件",
+   "manual_note": "入侵告警通知机制需在 EDR 控制台人工确认",
+   "id": "windows:33"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "b) 重要程序完整性检测",
+   "desc": "完整性检测工具是否部署（系统文件校验、文件监控）",
+   "why": "攻击者入侵后常篡改系统程序植入后门（如替换服务程序、DLL 劫持）；如果程序被篡改而不自知，等于后门常驻且所有基于该程序的检查都不可信。",
+   "expected": "（辅助参考）能定位到完整性检测工具或已启用 EDR 文件管控",
+   "mode": "人工核查",
+   "content": "完整性检测工具是否部署（系统文件校验、文件监控）",
+   "commands": [
+    "sfc /verifyonly（系统文件完整性校验）"
+   ],
+   "criteria": "（辅助参考）能定位到完整性检测工具或已启用 EDR 文件管控",
+   "manual_note": "完整性检测工具部署、策略配置与恢复措施需人工核查确认",
+   "id": "windows:34"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "c) 最小安装（含：端口服务过滤、其他服务安全）",
+   "desc": "检查危险服务（Telnet、Remote Registry、SNMP、SMBv1 等）是否禁用、监听端口是否最小化",
+   "why": "每开放一个服务就多一个攻击面——Telnet 明文传输、Remote Registry 可远程改注册表、SMBv1 存在永恒之蓝级漏洞；服务越少、端口越少，可被攻击的入口越少。这是“减少暴露面”的核心原则。",
+   "expected": "危险服务已停止/禁用、SMB1 关闭、监听端口符合白名单，即符合基线要求",
+   "mode": "部分人工",
+   "content": "检查危险服务（Telnet、Remote Registry、SNMP、SMBv1 等）是否禁用、监听端口是否最小化",
+   "commands": [
+    "Get-Service RemoteRegistry,Telnet,SNMP,FTPSVC,SNMPTRAP -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType",
+    "Get-SmbServerConfiguration | Select-Object EnableSMB1Protocol",
+    "Get-NetTCPConnection -State Listen | Sort-Object LocalPort"
+   ],
+   "criteria": "危险服务已停止并禁用、EnableSMB1Protocol=False、监听端口符合最小化白名单，即符合基线要求",
+   "manual_note": "端口白名单与业务必要性需人工确认",
+   "id": "windows:35"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "d) 关闭 ping 响应",
+   "desc": "检查是否禁止 ping 响应（防火墙 ICMP 回显规则）",
+   "why": "主机不响应 ping，攻击者在扫描网络时更难发现这台机器，降低了被发现的概率（注意：同时也会影响合法的连通性探测，需按实际需要配置）。",
+   "expected": "（辅助参考）无已启用的 ICMP 回显放行规则或存在阻止规则，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否禁止 ping 响应（防火墙 ICMP 回显规则）",
+   "commands": [
+    "Get-NetFirewallRule -Enabled True -Direction Inbound -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'ICMP|Echo|回显' } | Select-Object DisplayName,Action"
+   ],
+   "criteria": "（辅助参考）无已启用的 ICMP 回显放行规则或存在 Block 规则，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:36"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "e) 禁止 IP 源路径路由（含：ICMP 重定向）",
+   "desc": "检查是否已禁止 IP 源路径路由与 ICMP 重定向",
+   "why": "源路由选项允许发送方指定数据包经过的路由路径，攻击者可借此绕过防火墙过滤规则；ICMP 重定向可被用于劫持流量走向。",
+   "expected": "DisableIPSourceRouting=2、EnableICMPRedirect=0，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否已禁止 IP 源路径路由与 ICMP 重定向",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters' | Select-Object DisableIPSourceRouting,EnableICMPRedirect"
+   ],
+   "criteria": "DisableIPSourceRouting=2、EnableICMPRedirect=0，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:37"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "f) 补丁管理（系统更新）",
+   "desc": "检查系统补丁是否及时安装更新",
+   "why": "未修补的系统等于向全网公开“已知漏洞的利用方式”——永恒之蓝（MS17-010）等蠕虫级漏洞正是靠未打补丁的机器全网传播；补丁管理是成本最低、收益最高的安全措施。",
+   "expected": "能查到近期安装的补丁记录，补丁更新及时，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统补丁是否及时安装更新",
+   "commands": [
+    "Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -First 10 HotFixID,InstalledOn",
+    "systeminfo | findstr /i \"KB\""
+   ],
+   "criteria": "存在近期安装的补丁记录且无重大未修复漏洞，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:38"
+  },
+  {
+   "baseline": "windows",
+   "category": "五、入侵防范",
+   "name": "g) 主机防火墙启用",
+   "desc": "检查 Windows 防火墙是否在域/专用/公用配置文件下均已启用",
+   "why": "防火墙是第一道网络访问控制屏障；未启用时所有监听端口直接暴露，最小服务、端口管控等所有网络层防护全部失效。",
+   "expected": "Domain/Private/Public 三个配置文件均为 True，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查 Windows 防火墙是否在域/专用/公用配置文件下均已启用",
+   "commands": [
+    "Get-NetFirewallProfile | Select-Object Name,Enabled",
+    "netsh advfirewall show allprofiles state"
+   ],
+   "criteria": "Domain/Private/Public 均为 True，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:39"
+  },
+  {
+   "baseline": "windows",
+   "category": "六、恶意代码防范",
+   "name": "a) 防恶意代码软件（含：Windows Defender）",
+   "desc": "检查防恶意代码软件（Windows Defender/EDR 病毒查杀）是否运行且实时保护开启",
+   "why": "没有杀毒软件或病毒库长期不更新，木马、挖矿、勒索软件等恶意程序可以在主机上随意落地执行，失去最后一道防线。",
+   "expected": "AntivirusEnabled=True、实时保护开启、病毒库近期更新，即具备查杀条件",
+   "mode": "部分人工",
+   "content": "检查防恶意代码软件（Windows Defender/EDR 病毒查杀）是否运行且实时保护开启",
+   "commands": [
+    "Get-MpComputerStatus | Select-Object AntivirusEnabled,RealTimeProtectionEnabled,AntivirusSignatureLastUpdated"
+   ],
+   "criteria": "AntivirusEnabled=True、RealTimeProtectionEnabled=True、病毒库近期更新，即具备查杀条件",
+   "manual_note": "病毒库更新是否及时需在管理控制台人工核查",
+   "id": "windows:40"
+  },
+  {
+   "baseline": "windows",
+   "category": "六、恶意代码防范",
+   "name": "b) 主机与网络恶意代码库不同",
+   "desc": "主机侧与网络侧防恶意代码产品病毒库来源",
+   "why": "如果全网使用同一套病毒库，该厂商漏报的病毒在全网都漏报——“一损俱损”；异构病毒库可以互补，提高整体检出率。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "主机侧与网络侧防恶意代码产品病毒库来源",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需人工核查网络侧与主机侧病毒库是否不同厂商/不同病毒库",
+   "id": "windows:41"
+  },
+  {
+   "baseline": "windows",
+   "category": "六、恶意代码防范",
+   "name": "c) 防恶意代码统一管理",
+   "desc": "防恶意代码统一管理、统一升级情况",
+   "why": "分散管理容易出现“漏网之鱼”（有的主机没升级、没部署）；统一管理保证全部主机的策略和病毒库一致，覆盖完整。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "防恶意代码统一管理、统一升级情况",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需在 EDR/防病毒管理控制台人工确认统一策略、统一升级管理",
+   "id": "windows:42"
+  },
+  {
+   "baseline": "windows",
+   "category": "六、恶意代码防范",
+   "name": "d) 高级威胁防护（含：ASR、受控文件夹访问）",
+   "desc": "检查是否启用攻击面减少（ASR）规则与受控文件夹访问（防勒索）",
+   "why": "特征库只能查杀“已知”病毒；ASR、受控文件夹访问从行为层面阻断攻击链（宏执行、脚本下载、勒索加密），是应对未知威胁和勒索软件的关键防线。",
+   "expected": "ASR 规则已启用或受控文件夹访问已开启，即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否启用攻击面减少（ASR）规则与受控文件夹访问（防勒索）",
+   "commands": [
+    "Get-MpPreference | Select-Object EnableControlledFolderAccess,AttackSurfaceReductionRules_Ids,AttackSurfaceReductionRules_Actions"
+   ],
+   "criteria": "EnableControlledFolderAccess≥1 或 ASR 规则已配置启用，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:43"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "a) 终端接入限制（含：RDP 来源限制）",
+   "desc": "检查远程桌面访问来源是否受限（防火墙规则限定内网/管理网段、授权用户）",
+   "why": "如果不限制来源，任何 IP 地址都能尝试登录，爆破面全开放；限制来源后只有内网/管理网段的运维人员能连，攻击面大幅收窄。",
+   "expected": "RDP 入站规则限定 RemoteAddress 为内网/管理网段（非 Any），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查远程桌面访问来源是否受限（防火墙规则限定内网/管理网段、授权用户）",
+   "commands": [
+    "netsh advfirewall firewall show rule name=all | findstr /i \"3389 RemoteIP\"",
+    "Get-NetFirewallRule -Enabled True -Direction Inbound | Where-Object DisplayName -match '远程桌面|Remote Desktop' | Select-Object DisplayName,RemoteAddress"
+   ],
+   "criteria": "RDP 入站规则限定 RemoteAddress 为内网/管理网段（非 Any），即符合基线要求",
+   "manual_note": "堡垒机等补充接入管控手段需人工确认",
+   "id": "windows:44"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "b) 登录超时锁定（含：会话超时、屏幕保护）",
+   "desc": "检查远程桌面会话空闲超时是否设置、屏幕保护是否启用并在恢复时锁定",
+   "why": "运维人员离开后终端仍处于已登录状态，任何路过的人都可以直接利用该会话操作服务器；RDP 空闲会话长期挂起也可能被他人接管利用。",
+   "expected": "MaxIdleTime≤900000（15 分钟）且屏幕保护启用（恢复时显示登录界面），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查远程桌面会话空闲超时是否设置、屏幕保护是否启用并在恢复时锁定",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\Terminal Services' -ErrorAction SilentlyContinue | Select-Object MaxIdleTime,MaxDisconnectionTime",
+    "Get-ItemProperty 'HKCU:\\Control Panel\\Desktop' | Select-Object ScreenSaveActive,ScreenSaverIsSecure,ScreenSaveTimeOut"
+   ],
+   "criteria": "MaxIdleTime≤900000（15 分钟）且 ScreenSaveActive=1、ScreenSaverIsSecure=1，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:45"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "c) 资源使用监视",
+   "desc": "资源监视平台部署情况",
+   "why": "资源异常往往是入侵或故障的早期信号：CPU 飙高可能是挖矿木马、磁盘写满可能是日志风暴或数据泄露；及时发现才能及时处置。",
+   "expected": "（辅助参考）监控进程在运行",
+   "mode": "人工核查",
+   "content": "资源监视平台部署情况",
+   "commands": [
+    "Get-Service | Where-Object { $_.Name -match 'zabbix|scom|prometheus|monitor' } | Select-Object Name,Status"
+   ],
+   "criteria": "（辅助参考）监控进程在运行",
+   "manual_note": "CPU/内存/磁盘/网络监视是否覆盖重要主机需人工确认",
+   "id": "windows:46"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "d) 单个用户资源限制（含：磁盘配额）",
+   "desc": "检查是否配置磁盘配额或单用户资源使用限制",
+   "why": "单个用户可以耗尽系统全部资源（磁盘写满、进程失控），导致整机不可用；资源限额可在源头限制破坏范围。",
+   "expected": "磁盘配额已启用（或按业务说明不适用），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否配置磁盘配额或单用户资源使用限制",
+   "commands": [
+    "fsutil quota query C:（需以管理员身份运行）",
+    "Get-CimInstance Win32_QuotaSetting | Select-Object VolumePath,State"
+   ],
+   "criteria": "磁盘配额已启用或按业务确认不适用，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:47"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "e) 服务水平检测与报警",
+   "desc": "监控平台服务水平检测与告警能力",
+   "why": "服务异常而无人知晓=业务中断无人响应；主动告警才能保证第一时间介入处置，将影响降到最低。",
+   "expected": "无适用命令",
+   "mode": "人工核查",
+   "content": "监控平台服务水平检测与告警能力",
+   "commands": [
+    "无（本项无法用命令自动检查）"
+   ],
+   "criteria": "无适用命令",
+   "manual_note": "需人工确认监控平台具备声/光/短信/邮件等告警方式且已配置通知渠道",
+   "id": "windows:48"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "f) 配置安全的 DNS 服务器",
+   "desc": "检查系统 DNS 服务器配置",
+   "why": "DNS 被劫持后，所有域名解析都会被指向攻击者的钓鱼/恶意站点——用户访问的“官网”其实是陷阱；使用可信 DNS 是防止域名劫持的基础。",
+   "expected": "DNS 指向企业可信 DNS 地址（对照企业 DNS 清单），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查系统 DNS 服务器配置",
+   "commands": [
+    "Get-DnsClientServerAddress -AddressFamily IPv4 | Select-Object InterfaceAlias,ServerAddresses"
+   ],
+   "criteria": "DNS 指向企业可信 DNS 地址（对照企业 DNS 清单），即符合基线要求",
+   "manual_note": "",
+   "id": "windows:49"
+  },
+  {
+   "baseline": "windows",
+   "category": "七、资源控制",
+   "name": "g) 可移动存储设备限制",
+   "desc": "检查是否禁用/限制未授权可移动存储设备",
+   "why": "U 盘既是病毒传播通道，也是数据外带通道；禁用未授权可移动存储可同时防“进”防“出”，是防泄密和防病毒的双重措施。",
+   "expected": "USB 存储已禁用（或按业务例外管理），即符合基线要求",
+   "mode": "命令可查",
+   "content": "检查是否禁用/限制未授权可移动存储设备",
+   "commands": [
+    "Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\USBSTOR' | Select-Object Start"
+   ],
+   "criteria": "Start=4（已禁用）或按业务例外管控并审批，即符合基线要求",
+   "manual_note": "",
+   "id": "windows:50"
+  }
+ ],
+ "mysql": [
+  {
+   "baseline": "mysql",
+   "category": "一、身份鉴别",
+   "name": "root 密码复杂度",
+   "desc": "检查 root 账户密码是否满足复杂度要求",
+   "why": "弱密码可被暴力破解获取数据库管理权限，导致数据泄露或篡改",
+   "expected": "root 密码长度≥8 且含大小写+数字+特殊字符",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT user,host FROM mysql.user WHERE user='root'"
+   ],
+   "criteria": "root 密码满足复杂度，无空密码",
+   "manual_note": "",
+   "id": "mysql:1"
+  },
+  {
+   "baseline": "mysql",
+   "category": "一、身份鉴别",
+   "name": "密码有效期",
+   "desc": "检查是否配置密码过期策略",
+   "why": "长期不更换的密码泄露后永久有效",
+   "expected": "default_password_lifetime 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'default_password_lifetime'"
+   ],
+   "criteria": "default_password_lifetime ≤ 90",
+   "manual_note": "",
+   "id": "mysql:2"
+  },
+  {
+   "baseline": "mysql",
+   "category": "一、身份鉴别",
+   "name": "空密码账户检查",
+   "desc": "检查是否存在空密码账户",
+   "why": "空密码账户等于没上锁，任何人可直接登录",
+   "expected": "无空密码账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT user,host FROM mysql.user WHERE authentication_string=''"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "mysql:3"
+  },
+  {
+   "baseline": "mysql",
+   "category": "一、身份鉴别",
+   "name": "匿名账户检查",
+   "desc": "检查是否存在匿名账户（空用户名）",
+   "why": "匿名账户允许无凭据连接数据库",
+   "expected": "无匿名账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT user,host FROM mysql.user WHERE user=''"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "mysql:4"
+  },
+  {
+   "baseline": "mysql",
+   "category": "二、访问控制",
+   "name": "最小权限原则",
+   "desc": "检查是否按最小权限原则授权用户权限",
+   "why": "过度授权（如全局 SELECT/INSERT/DELETE）可导致越权访问或数据泄露",
+   "expected": "用户权限按库/表级最小化授权",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT user,host,Super_priv FROM mysql.user WHERE Super_priv='Y'"
+   ],
+   "criteria": "仅 DBA 管理员拥有 SUPER 权限",
+   "manual_note": "",
+   "id": "mysql:5"
+  },
+  {
+   "baseline": "mysql",
+   "category": "二、访问控制",
+   "name": "远程 root 登录限制",
+   "desc": "检查 root 是否允许远程登录",
+   "why": "root 远程登录是爆破攻击首选目标",
+   "expected": "root 仅允许 localhost 登录",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT user,host FROM mysql.user WHERE user='root' AND host NOT IN ('localhost','127.0.0.1')"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "mysql:6"
+  },
+  {
+   "baseline": "mysql",
+   "category": "二、访问控制",
+   "name": "secure_file_priv 限制",
+   "desc": "检查 secure_file_priv 是否限制文件导入导出路径",
+   "why": "不限制时可利用 LOAD DATA INFILE 读取任意文件或 OUTFILE 写文件获取 shell",
+   "expected": "secure_file_priv 配置为特定目录或 NULL",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'secure_file_priv'"
+   ],
+   "criteria": "secure_file_priv 非 NULL 或非空（限制为特定目录）",
+   "manual_note": "",
+   "id": "mysql:7"
+  },
+  {
+   "baseline": "mysql",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用审计日志（audit log 或 general log）",
+   "why": "审计日志记录 SQL 操作和登录行为，是追溯依据",
+   "expected": "审计日志已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'general_log%'",
+    "SHOW VARIABLES LIKE 'audit%'"
+   ],
+   "criteria": "general_log=ON 或已安装审计插件",
+   "manual_note": "",
+   "id": "mysql:8"
+  },
+  {
+   "baseline": "mysql",
+   "category": "三、安全审计",
+   "name": "慢查询日志",
+   "desc": "检查是否启用慢查询日志",
+   "why": "慢查询日志可发现异常的大表扫描或数据泄露操作",
+   "expected": "慢查询日志已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'slow_query_log%'"
+   ],
+   "criteria": "slow_query_log=ON",
+   "manual_note": "",
+   "id": "mysql:9"
+  },
+  {
+   "baseline": "mysql",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "mysql:10"
+  },
+  {
+   "baseline": "mysql",
+   "category": "五、入侵防范",
+   "name": "禁用 LOCAL INFILE",
+   "desc": "检查是否禁用 local_infile",
+   "why": "启用 LOCAL INFILE 可被利用读取 MySQL 服务器本地文件",
+   "expected": "local_infile=OFF",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'local_infile'"
+   ],
+   "criteria": "local_infile=OFF",
+   "manual_note": "",
+   "id": "mysql:11"
+  },
+  {
+   "baseline": "mysql",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 MySQL 版本是否有已知漏洞",
+   "why": "旧版本存在多个已知漏洞（如 CVE-2021-2154 等）",
+   "expected": "MySQL 版本为最新稳定版",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT VERSION()"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "mysql:12"
+  },
+  {
+   "baseline": "mysql",
+   "category": "五、入侵防范",
+   "name": "skip-grant-tables 检查",
+   "desc": "检查启动参数是否含 skip-grant-tables",
+   "why": "skip-grant-tables 跳过权限验证，任何人可无密码连接",
+   "expected": "启动参数不含 skip-grant-tables",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "ps -ef | grep mysqld | grep skip-grant-tables"
+   ],
+   "criteria": "无 skip-grant-tables 参数",
+   "manual_note": "",
+   "id": "mysql:13"
+  },
+  {
+   "baseline": "mysql",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "mysql:14"
+  },
+  {
+   "baseline": "mysql",
+   "category": "七、资源控制",
+   "name": "最大连接数限制",
+   "desc": "检查 max_connections 是否配置合理值",
+   "why": "不限制连接数可被 DoS 攻击耗尽数据库连接",
+   "expected": "max_connections 配置了合理上限",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'max_connections'"
+   ],
+   "criteria": "max_connections 配置了合理上限（如 500-1000）",
+   "manual_note": "",
+   "id": "mysql:15"
+  },
+  {
+   "baseline": "mysql",
+   "category": "七、资源控制",
+   "name": "连接超时设置",
+   "desc": "检查 wait_timeout/interactive_timeout 是否合理",
+   "why": "超时过长导致空闲连接占用连接池",
+   "expected": "wait_timeout ≤ 28800（8小时）",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW VARIABLES LIKE 'wait_timeout'"
+   ],
+   "criteria": "wait_timeout ≤ 28800",
+   "manual_note": "",
+   "id": "mysql:16"
+  }
+ ],
+ "postgresql": [
+  {
+   "baseline": "postgresql",
+   "category": "一、身份鉴别",
+   "name": "密码加密存储",
+   "desc": "检查密码是否加密存储",
+   "why": "明文密码存储可被读取泄露",
+   "expected": "password_encryption=md5 或 scram-sha-256",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW password_encryption"
+   ],
+   "criteria": "password_encryption=scram-sha-256 或 md5",
+   "manual_note": "",
+   "id": "postgresql:1"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "一、身份鉴别",
+   "name": "空密码账户检查",
+   "desc": "检查是否存在空密码账户",
+   "why": "空密码账户可被无凭据连接",
+   "expected": "无空密码账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT rolname FROM pg_authid WHERE rolcanlogin AND rolpassword IS NULL"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "postgresql:2"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "一、身份鉴别",
+   "name": "密码有效期",
+   "desc": "检查是否配置密码有效期",
+   "why": "长期不更换的密码泄露后永久有效",
+   "expected": "用户密码配置了有效期",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT rolname, valuntil FROM pg_authid WHERE rolcanlogin"
+   ],
+   "criteria": "valuntil 字段非 NULL 且为近期日期",
+   "manual_note": "",
+   "id": "postgresql:3"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "二、访问控制",
+   "name": "pg_hba.conf 认证配置",
+   "desc": "检查 pg_hba.conf 是否配置认证且限制来源",
+   "why": "trust 认证模式允许无密码连接，不限制来源可被外部访问",
+   "expected": "认证方式为 md5/scram-sha-256 且限制来源 IP",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $PGDATA/pg_hba.conf | grep -v '^#' | grep -v '^$'"
+   ],
+   "criteria": "无 trust 认证，且 host 行限定了来源 IP",
+   "manual_note": "",
+   "id": "postgresql:4"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "二、访问控制",
+   "name": "最小权限原则",
+   "desc": "检查是否按最小权限授权",
+   "why": "过度授权可导致越权访问",
+   "expected": "用户权限按库/模式级最小化",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT rolname, rolsuper FROM pg_roles WHERE rolsuper=true"
+   ],
+   "criteria": "仅 DBA 拥有 superuser 权限",
+   "manual_note": "",
+   "id": "postgresql:5"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用 log_statement 和 log_connections",
+   "why": "审计日志记录 SQL 操作和连接行为",
+   "expected": "log_statement 配置为 all 或 ddl，log_connections=on",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW log_statement",
+    "SHOW log_connections"
+   ],
+   "criteria": "log_statement=ddl 或 all，log_connections=on",
+   "manual_note": "",
+   "id": "postgresql:6"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "postgresql:7"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "五、入侵防范",
+   "name": "SSL 加密通信",
+   "desc": "检查是否启用 SSL 通信",
+   "why": "明文通信可被中间人截获查询内容",
+   "expected": "ssl=on",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW ssl"
+   ],
+   "criteria": "ssl=on",
+   "manual_note": "",
+   "id": "postgresql:8"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 PostgreSQL 版本是否有已知漏洞",
+   "why": "旧版本存在多个已知漏洞",
+   "expected": "版本为最新稳定版",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT VERSION()"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "postgresql:9"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "postgresql:10"
+  },
+  {
+   "baseline": "postgresql",
+   "category": "七、资源控制",
+   "name": "最大连接数限制",
+   "desc": "检查 max_connections 是否合理",
+   "why": "不限制连接数可被 DoS 攻击",
+   "expected": "max_connections 配置了合理上限",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW max_connections"
+   ],
+   "criteria": "max_connections 配置了合理上限",
+   "manual_note": "",
+   "id": "postgresql:11"
+  }
+ ],
+ "oracle": [
+  {
+   "baseline": "oracle",
+   "category": "一、身份鉴别",
+   "name": "默认账户密码",
+   "desc": "检查是否修改默认账户（SYS/SYSTEM/DBSNMP 等）密码",
+   "why": "默认密码（如 SYS/change_on_install）可被直接登录获取 DBA 权限",
+   "expected": "默认账户密码已修改且满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT username FROM dba_users WHERE username IN ('SYS','SYSTEM','DBSNMP','OUTLN')"
+   ],
+   "criteria": "无默认密码，密码满足复杂度",
+   "manual_note": "",
+   "id": "oracle:1"
+  },
+  {
+   "baseline": "oracle",
+   "category": "一、身份鉴别",
+   "name": "密码策略",
+   "desc": "检查是否配置密码复杂度与有效期",
+   "why": "弱密码可被暴力破解；不限制有效期则泄露后永久有效",
+   "expected": "配置了密码复杂度函数且有效期≤90 天",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT profile, resource_name, limit FROM dba_profiles WHERE resource_name LIKE 'PASSWORD%'"
+   ],
+   "criteria": "PASSWORD_VERIFY_FUNCTION 非 NULL，PASSWORD_LIFE_TIME≤90",
+   "manual_note": "",
+   "id": "oracle:2"
+  },
+  {
+   "baseline": "oracle",
+   "category": "一、身份鉴别",
+   "name": "锁定账户检查",
+   "desc": "检查是否锁定过期/不使用的账户",
+   "why": "未锁定的不活跃账户是潜伏后门",
+   "expected": "不活跃账户已锁定",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT username, account_status FROM dba_users WHERE account_status='OPEN'"
+   ],
+   "criteria": "仅活跃账户为 OPEN 状态",
+   "manual_note": "",
+   "id": "oracle:3"
+  },
+  {
+   "baseline": "oracle",
+   "category": "二、访问控制",
+   "name": "最小权限原则",
+   "desc": "检查是否按最小权限授权",
+   "why": "过度授权（如 DBA 角色授予普通用户）可导致越权",
+   "expected": "DBA 角色仅授予必要的 DBA 账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT grantee FROM dba_role_privs WHERE granted_role='DBA'"
+   ],
+   "criteria": "仅 DBA 账户拥有 DBA 角色",
+   "manual_note": "",
+   "id": "oracle:4"
+  },
+  {
+   "baseline": "oracle",
+   "category": "二、访问控制",
+   "name": "远程登录限制",
+   "desc": "检查 sqlnet.ora 是否限制来源",
+   "why": "不限制来源可被外部尝试连接",
+   "expected": "sqlnet.ora 配置了 TCP.VALIDNODE_CHECKING 且排除非授权 IP",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $ORACLE_HOME/network/admin/sqlnet.ora | grep -i 'VALIDNODE\\|EXCLUDE'"
+   ],
+   "criteria": "配置了节点检查且仅允许授权 IP",
+   "manual_note": "",
+   "id": "oracle:5"
+  },
+  {
+   "baseline": "oracle",
+   "category": "三、安全审计",
+   "name": "审计功能启用",
+   "desc": "检查是否启用数据库审计",
+   "why": "审计日志记录 DDL/DML/登录等操作，是追溯依据",
+   "expected": "audit_trail=DB 或 OS",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW PARAMETER audit_trail"
+   ],
+   "criteria": "audit_trail=DB 或 OS（非 NONE）",
+   "manual_note": "",
+   "id": "oracle:6"
+  },
+  {
+   "baseline": "oracle",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "oracle:7"
+  },
+  {
+   "baseline": "oracle",
+   "category": "五、入侵防范",
+   "name": "补丁管理",
+   "desc": "检查是否安装最新 PSU/CPU 补丁",
+   "why": "Oracle 历史上多次出现高危漏洞，未打补丁可被远程利用",
+   "expected": "已安装近期 PSU/CPU 补丁",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT patch_id, action_time FROM dba_registry_sqlpatch ORDER BY action_time DESC"
+   ],
+   "criteria": "存在近期补丁记录",
+   "manual_note": "",
+   "id": "oracle:8"
+  },
+  {
+   "baseline": "oracle",
+   "category": "五、入侵防范",
+   "name": "监听器密码",
+   "desc": "检查 Listener 是否配置密码",
+   "why": "无密码的 Listener 可被远程管理（LSNRCTL），可读取数据库文件或设置日志路径获取数据",
+   "expected": "Listener 配置了 ADMIN_RESTRICTIONS 或密码",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "lsnrctl status | grep -i 'security\\|password'"
+   ],
+   "criteria": "配置了密码或 ADMIN_RESTRICTIONS_listener=ON",
+   "manual_note": "",
+   "id": "oracle:9"
+  },
+  {
+   "baseline": "oracle",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "oracle:10"
+  },
+  {
+   "baseline": "oracle",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否限制 SESSION 数量",
+   "why": "不限制可被 DoS 耗尽连接",
+   "expected": "配置了 SESSIONS 参数上限",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SHOW PARAMETER sessions"
+   ],
+   "criteria": "sessions 配置了合理上限",
+   "manual_note": "",
+   "id": "oracle:11"
+  },
+  {
+   "baseline": "oracle",
+   "category": "七、资源控制",
+   "name": "连接超时",
+   "desc": "检查是否配置空闲连接超时",
+   "why": "超时过长导致空闲连接占用资源",
+   "expected": "IDLE_TIME 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT profile, resource_name, limit FROM dba_profiles WHERE resource_name='IDLE_TIME'"
+   ],
+   "criteria": "IDLE_TIME ≤ 30（分钟）",
+   "manual_note": "",
+   "id": "oracle:12"
+  }
+ ],
+ "sqlserver": [
+  {
+   "baseline": "sqlserver",
+   "category": "一、身份鉴别",
+   "name": "sa 密码复杂度",
+   "desc": "检查 sa 账户密码是否满足复杂度",
+   "why": "sa 是 SQL Server 最高权限账户，弱密码可被暴力破解",
+   "expected": "sa 密码长度≥8 且含大小写+数字+特殊字符",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT name FROM sys.sql_logins WHERE name='sa'"
+   ],
+   "criteria": "sa 密码满足复杂度",
+   "manual_note": "",
+   "id": "sqlserver:1"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "一、身份鉴别",
+   "name": "密码策略",
+   "desc": "检查是否启用密码复杂度和过期策略",
+   "why": "不启用则弱密码可长期使用",
+   "expected": "CHECK_POLICY=ON 且 CHECK_EXPIRATION=ON",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT name, is_policy_checked, is_expiration_checked FROM sys.sql_logins"
+   ],
+   "criteria": "is_policy_checked=1 且 is_expiration_checked=1",
+   "manual_note": "",
+   "id": "sqlserver:2"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "一、身份鉴别",
+   "name": "空密码检查",
+   "desc": "检查是否存在空密码登录账户",
+   "why": "空密码账户可被无凭据连接",
+   "expected": "无空密码账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT name FROM sys.sql_logins WHERE password_hash IS NULL"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "sqlserver:3"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "二、访问控制",
+   "name": "混合认证模式检查",
+   "desc": "检查认证模式是否为 Windows 认证",
+   "why": "混合模式允许 SQL 认证，弱密码风险更大",
+   "expected": "认证模式为 Windows 认证（推荐）或混合模式但密码策略严格",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT SERVERPROPERTY('IsIntegratedSecurityOnly')"
+   ],
+   "criteria": "返回 1 为纯 Windows 认证（推荐），返回 0 为混合模式",
+   "manual_note": "",
+   "id": "sqlserver:4"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "二、访问控制",
+   "name": "最小权限原则",
+   "desc": "检查是否按最小权限授权",
+   "why": "过度授权可导致越权",
+   "expected": "sysadmin 角色仅授予必要 DBA 账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT name FROM sys.server_principals WHERE type='S' AND principal_id IN (SELECT member_principal_id FROM sys.server_role_members WHERE role_principal_id=(SELECT principal_id FROM sys.server_principals WHERE name='sysadmin'))"
+   ],
+   "criteria": "仅 DBA 账户拥有 sysadmin",
+   "manual_note": "",
+   "id": "sqlserver:5"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "二、访问控制",
+   "name": "xp_cmdshell 禁用",
+   "desc": "检查 xp_cmdshell 是否禁用",
+   "why": "xp_cmdshell 可执行操作系统命令，是 SQL 注入获取 shell 的关键通道",
+   "expected": "xp_cmdshell 已禁用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "EXEC sp_configure 'xp_cmdshell'"
+   ],
+   "criteria": "config_value=0",
+   "manual_note": "",
+   "id": "sqlserver:6"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "三、安全审计",
+   "name": "审计功能启用",
+   "desc": "检查是否启用 SQL Server Audit 或 C2 Audit",
+   "why": "审计日志记录 SQL 操作和登录行为",
+   "expected": "已启用 Audit 或 C2 Audit Tracing",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT * FROM sys.dm_audit_actions WHERE action_id IS NOT NULL"
+   ],
+   "criteria": "存在审计配置",
+   "manual_note": "",
+   "id": "sqlserver:7"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "sqlserver:8"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "五、入侵防范",
+   "name": "远程连接限制",
+   "desc": "检查是否限制远程连接来源",
+   "why": "不限制来源可被外部尝试连接",
+   "expected": "SQL Server 仅监听内网 IP",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 SQL Server 配置管理器 → 网络配置 → TCP/IP → IPAll"
+   ],
+   "criteria": "TCP/IP 仅监听内网地址",
+   "manual_note": "",
+   "id": "sqlserver:9"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 SQL Server 版本和补丁",
+   "why": "旧版本存在多个已知漏洞",
+   "expected": "版本为最新且已安装补丁",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT @@VERSION"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "sqlserver:10"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "sqlserver:11"
+  },
+  {
+   "baseline": "sqlserver",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查 max worker threads 和 user connections",
+   "why": "不限制可被 DoS 耗尽连接",
+   "expected": "配置了合理上限",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "EXEC sp_configure 'user connections'"
+   ],
+   "criteria": "user connections 配置了合理上限或 0（动态）",
+   "manual_note": "",
+   "id": "sqlserver:12"
+  }
+ ],
+ "mongodb": [
+  {
+   "baseline": "mongodb",
+   "category": "一、身份鉴别",
+   "name": "认证启用",
+   "desc": "检查 MongoDB 是否启用认证",
+   "why": "无认证的 MongoDB 可被任意连接读写数据，历史上大量 MongoDB 被入侵导致数据泄露",
+   "expected": "authorization: enabled",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.runCommand({getParameter:1, authorization:1})'"
+   ],
+   "criteria": "authorization=enabled",
+   "manual_note": "",
+   "id": "mongodb:1"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "一、身份鉴别",
+   "name": "默认密码修改",
+   "desc": "检查是否修改默认管理员密码",
+   "why": "默认无密码或弱密码可被直接登录",
+   "expected": "管理员密码已设置且满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.system.users.find()'"
+   ],
+   "criteria": "存在管理员账户且密码非空",
+   "manual_note": "",
+   "id": "mongodb:2"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "二、访问控制",
+   "name": "监听地址限制",
+   "desc": "检查 bindIp 是否限定内网地址",
+   "why": "监听 0.0.0.0 可被外部网络直接访问",
+   "expected": "bindIp 配置了内网 IP",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.runCommand({getParameter:1, net:{}})'"
+   ],
+   "criteria": "bindIp 非 0.0.0.0",
+   "manual_note": "",
+   "id": "mongodb:3"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "二、访问控制",
+   "name": "角色最小化",
+   "desc": "检查用户角色是否按最小权限分配",
+   "why": "过度授权（如 root 角色授予应用用户）可导致越权",
+   "expected": "应用用户仅授予 readWrite 角色",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.system.users.find({}, {user:1, roles:1})'"
+   ],
+   "criteria": "应用用户无 root/dbAdmin 等高权限角色",
+   "manual_note": "",
+   "id": "mongodb:4"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用审计日志",
+   "why": "审计日志记录数据库操作行为",
+   "expected": "auditLog 配置已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.runCommand({getParameter:1, auditLog:{}})'"
+   ],
+   "criteria": "auditLog.destination 非 'off'",
+   "manual_note": "",
+   "id": "mongodb:5"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "mongodb:6"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "五、入侵防范",
+   "name": "TLS 加密通信",
+   "desc": "检查是否启用 TLS",
+   "why": "明文通信可被中间人截获数据",
+   "expected": "net.tls.mode 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.runCommand({getParameter:1, net:{tls:{}}})'"
+   ],
+   "criteria": "配置了 TLS 证书和模式",
+   "manual_note": "",
+   "id": "mongodb:7"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 MongoDB 版本是否有已知漏洞",
+   "why": "旧版本存在多个已知漏洞",
+   "expected": "版本为最新稳定版",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.version()'"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "mongodb:8"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "mongodb:9"
+  },
+  {
+   "baseline": "mongodb",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否配置最大连接数",
+   "why": "不限制可被 DoS 耗尽连接",
+   "expected": "maxIncomingConnections 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "mongosh --eval 'db.runCommand({getParameter:1, net:{maxIncomingConnections:1}})'"
+   ],
+   "criteria": "maxIncomingConnections 配置了合理上限",
+   "manual_note": "",
+   "id": "mongodb:10"
+  }
+ ],
+ "redis_db": [
+  {
+   "baseline": "redis_db",
+   "category": "一、身份鉴别",
+   "name": "密码认证",
+   "desc": "检查 Redis 是否配置密码认证",
+   "why": "无密码的 Redis 可被任意连接读写数据",
+   "expected": "已配置 requirepass 且密码满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET requirepass"
+   ],
+   "criteria": "requirepass 非空且密码长度≥8",
+   "manual_note": "",
+   "id": "redis_db:1"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "二、访问控制",
+   "name": "监听地址限制",
+   "desc": "检查 bind 是否限定内网地址",
+   "why": "监听 0.0.0.0 可被外部网络直接访问",
+   "expected": "bind 配置了内网 IP",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET bind"
+   ],
+   "criteria": "bind 非 0.0.0.0",
+   "manual_note": "",
+   "id": "redis_db:2"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "二、访问控制",
+   "name": "危险命令禁用",
+   "desc": "检查 FLUSHALL/CONFIG 等危险命令是否禁用/重命名",
+   "why": "危险命令可清空数据或修改运行配置",
+   "expected": "FLUSHALL/CONFIG 已重命名或禁用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET rename-command"
+   ],
+   "criteria": "rename-command FLUSHALL \"\" 或已重命名",
+   "manual_note": "",
+   "id": "redis_db:3"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "三、安全审计",
+   "name": "慢查询日志",
+   "desc": "检查慢查询日志是否启用",
+   "why": "慢查询日志可发现异常操作",
+   "expected": "slowlog 配置已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET slowlog-log-slower-than"
+   ],
+   "criteria": "配置了合理阈值",
+   "manual_note": "",
+   "id": "redis_db:4"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "redis_db:5"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "五、入侵防范",
+   "name": "TLS 加密",
+   "desc": "检查是否启用 TLS",
+   "why": "明文通信可被截获",
+   "expected": "已配置 TLS 或运行在受信内网",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET tls-port"
+   ],
+   "criteria": "tls-port > 0",
+   "manual_note": "",
+   "id": "redis_db:6"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 Redis 版本是否有已知漏洞",
+   "why": "旧版本存在已知漏洞",
+   "expected": "版本为最新稳定版",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli INFO | grep redis_version"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "redis_db:7"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "redis_db:8"
+  },
+  {
+   "baseline": "redis_db",
+   "category": "七、资源控制",
+   "name": "最大内存限制",
+   "desc": "检查 maxmemory 是否配置",
+   "why": "不限制内存可被数据膨胀耗尽主机内存",
+   "expected": "maxmemory 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET maxmemory"
+   ],
+   "criteria": "maxmemory > 0",
+   "manual_note": "",
+   "id": "redis_db:9"
+  }
+ ],
+ "dm": [
+  {
+   "baseline": "dm",
+   "category": "一、身份鉴别",
+   "name": "默认密码修改",
+   "desc": "检查 SYSDBA/SYSAUDITOR 默认密码是否修改",
+   "why": "默认密码（SYSDBA/SYSDBA）可被直接登录获取管理权限",
+   "expected": "默认密码已修改且满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT USERNAME FROM DBA_USERS WHERE USERNAME IN ('SYSDBA','SYSAUDITOR')"
+   ],
+   "criteria": "无默认密码，密码满足复杂度",
+   "manual_note": "",
+   "id": "dm:1"
+  },
+  {
+   "baseline": "dm",
+   "category": "一、身份鉴别",
+   "name": "密码策略",
+   "desc": "检查是否配置密码复杂度和有效期",
+   "why": "弱密码可被暴力破解；不限制有效期则泄露后永久有效",
+   "expected": "配置了密码复杂度策略且有效期≤90 天",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT * FROM DBA_PROFILES WHERE RESOURCE_NAME LIKE 'PASSWORD%'"
+   ],
+   "criteria": "PASSWORD_VERIFY_FUNCTION 非空，PASSWORD_LIFE_TIME≤90",
+   "manual_note": "",
+   "id": "dm:2"
+  },
+  {
+   "baseline": "dm",
+   "category": "一、身份鉴别",
+   "name": "空密码检查",
+   "desc": "检查是否存在空密码账户",
+   "why": "空密码可被无凭据连接",
+   "expected": "无空密码账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT USERNAME FROM DBA_USERS WHERE PASSWORD IS NULL"
+   ],
+   "criteria": "查询结果为空",
+   "manual_note": "",
+   "id": "dm:3"
+  },
+  {
+   "baseline": "dm",
+   "category": "二、访问控制",
+   "name": "最小权限原则",
+   "desc": "检查是否按最小权限授权",
+   "why": "过度授权可导致越权",
+   "expected": "DBA 角色仅授予必要管理账户",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT GRANTEE FROM DBA_ROLE_PRIVS WHERE GRANTED_ROLE='DBA'"
+   ],
+   "criteria": "仅 DBA 账户拥有 DBA 角色",
+   "manual_note": "",
+   "id": "dm:4"
+  },
+  {
+   "baseline": "dm",
+   "category": "二、访问控制",
+   "name": "远程登录限制",
+   "desc": "检查是否限制远程连接来源",
+   "why": "不限制来源可被外部尝试连接",
+   "expected": "通过 dm.ini 或防火墙限制来源",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 dm.ini 中监听配置或防火墙规则"
+   ],
+   "criteria": "监听地址限定为内网",
+   "manual_note": "",
+   "id": "dm:5"
+  },
+  {
+   "baseline": "dm",
+   "category": "三、安全审计",
+   "name": "审计功能启用",
+   "desc": "检查是否启用审计",
+   "why": "审计日志记录 DDL/DML/登录等操作",
+   "expected": "已启用审计功能",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT * FROM V$PARAMETER WHERE NAME LIKE '%AUDIT%'"
+   ],
+   "criteria": "审计参数为启用状态",
+   "manual_note": "",
+   "id": "dm:6"
+  },
+  {
+   "baseline": "dm",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "数据库层不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "dm:7"
+  },
+  {
+   "baseline": "dm",
+   "category": "五、入侵防范",
+   "name": "补丁管理",
+   "desc": "检查是否安装最新补丁",
+   "why": "未打补丁可能存在已知漏洞",
+   "expected": "已安装近期补丁",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "SELECT * FROM V$VERSION"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "dm:8"
+  },
+  {
+   "baseline": "dm",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "数据库层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "数据库层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "dm:9"
+  },
+  {
+   "baseline": "dm",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否限制最大连接数",
+   "why": "不限制可被 DoS 耗尽连接",
+   "expected": "配置了合理上限",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 dm.ini 中 MAX_SESSIONS 参数"
+   ],
+   "criteria": "MAX_SESSIONS 配置了合理上限",
+   "manual_note": "",
+   "id": "dm:10"
+  }
+ ],
+ "nginx": [
+  {
+   "baseline": "nginx",
+   "category": "一、身份鉴别",
+   "name": "运行用户最小化",
+   "desc": "检查 Nginx worker 进程是否以非 root 用户运行",
+   "why": "以 root 运行的 worker 进程被入侵后获得 root 权限；使用低权限用户（如 nginx/www）可限制破坏范围",
+   "expected": "worker 进程用户为非 root（如 nginx 或 www）",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "ps -ef | grep nginx | grep -v grep"
+   ],
+   "criteria": "worker 进程用户为 nginx 或 www 等 非 root 用户",
+   "manual_note": "",
+   "id": "nginx:1"
+  },
+  {
+   "baseline": "nginx",
+   "category": "一、身份鉴别",
+   "name": "管理接口认证",
+   "desc": "检查 Nginx 管理页面或状态页（stub_status）是否配置访问认证",
+   "why": "未认证的状态页暴露连接数、请求量等敏感信息，攻击者可据此推断架构和发起精准攻击",
+   "expected": "stub_status 页面配置了 allow/deny 或 auth_basic 认证",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep -A5 'stub_status\\|auth_basic'"
+   ],
+   "criteria": "stub_status 位置配置了 auth_basic 或 allow IP 限制",
+   "manual_note": "",
+   "id": "nginx:2"
+  },
+  {
+   "baseline": "nginx",
+   "category": "二、访问控制",
+   "name": "隐藏版本信息",
+   "desc": "检查是否隐藏 Nginx 版本号",
+   "why": "版本号暴露可让攻击者直接按版本搜索已知漏洞发起定向攻击",
+   "expected": "server_tokens off",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep server_tokens"
+   ],
+   "criteria": "server_tokens off",
+   "manual_note": "",
+   "id": "nginx:3"
+  },
+  {
+   "baseline": "nginx",
+   "category": "二、访问控制",
+   "name": "目录浏览禁用",
+   "desc": "检查是否禁用目录列表（autoindex）",
+   "why": "目录列表暴露 Web 根目录下所有文件，可能泄露配置文件、备份脚本等敏感信息",
+   "expected": "autoindex off 或未配置 autoindex on",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep autoindex"
+   ],
+   "criteria": "无 autoindex on 配置",
+   "manual_note": "",
+   "id": "nginx:4"
+  },
+  {
+   "baseline": "nginx",
+   "category": "二、访问控制",
+   "name": "限制 HTTP 方法",
+   "desc": "检查是否限制不必要的 HTTP 方法",
+   "why": "TRACE/DELETE 等方法可能被用于跨站跟踪（XST）攻击或误操作删除资源",
+   "expected": "仅允许 GET/POST/HEAD 方法",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep -i 'limit_except\\|allow_method'"
+   ],
+   "criteria": "配置了 limit_except GET POST HEAD 或等效限制",
+   "manual_note": "",
+   "id": "nginx:5"
+  },
+  {
+   "baseline": "nginx",
+   "category": "三、安全审计",
+   "name": "访问日志启用",
+   "desc": "检查是否启用 access_log 并记录完整信息",
+   "why": "访问日志是事后追溯攻击的唯一依据；不记录访问日志发生入侵后无法还原攻击过程",
+   "expected": "access_log 已启用且记录格式包含客户端 IP、时间、请求、状态码",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep access_log"
+   ],
+   "criteria": "access_log 配置了日志路径且未设置为 off",
+   "manual_note": "",
+   "id": "nginx:6"
+  },
+  {
+   "baseline": "nginx",
+   "category": "三、安全审计",
+   "name": "错误日志启用",
+   "desc": "检查是否启用 error_log",
+   "why": "错误日志记录 Nginx 运行异常和攻击行为（如配置文件解析错误、上游异常），是排查问题的重要依据",
+   "expected": "error_log 已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep error_log"
+   ],
+   "criteria": "error_log 配置了日志路径",
+   "manual_note": "",
+   "id": "nginx:7"
+  },
+  {
+   "baseline": "nginx",
+   "category": "四、剩余信息保护",
+   "name": "错误页面不泄露信息",
+   "desc": "检查自定义错误页面是否隐藏版本和内部信息",
+   "why": "默认错误页面暴露 Nginx 版本和路径信息，攻击者据此搜索漏洞",
+   "expected": "自定义错误页面不包含版本号、路径等敏感信息",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep error_page"
+   ],
+   "criteria": "配置了 error_page 且页面内容不含版本信息",
+   "manual_note": "",
+   "id": "nginx:8"
+  },
+  {
+   "baseline": "nginx",
+   "category": "五、入侵防范",
+   "name": "SSL/TLS 协议版本",
+   "desc": "检查是否禁用不安全的 SSL 协议（SSLv2/SSLv3）",
+   "why": "SSLv2/SSLv3 存在 POODLE 等已知漏洞，可被中间人攻击解密通信内容",
+   "expected": "ssl_protocols 仅包含 TLSv1.2 或更高版本",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep ssl_protocols"
+   ],
+   "criteria": "ssl_protocols 配置为 TLSv1.2 TLSv1.3 或更高，不含 SSLv2/SSLv3/TLSv1.0/TLSv1.1",
+   "manual_note": "",
+   "id": "nginx:9"
+  },
+  {
+   "baseline": "nginx",
+   "category": "五、入侵防范",
+   "name": "加密套件配置",
+   "desc": "检查是否配置高强度加密套件",
+   "why": "弱加密套件（如 RC4、DES、MD5）可被破解，导致通信内容被解密",
+   "expected": "ssl_ciphers 配置为 HIGH:!aNULL:!MD5:!RC4 等高强度套件",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep ssl_ciphers"
+   ],
+   "criteria": "ssl_ciphers 不含 RC4、DES、MD5、EXPORT、NULL",
+   "manual_note": "",
+   "id": "nginx:10"
+  },
+  {
+   "baseline": "nginx",
+   "category": "五、入侵防范",
+   "name": "请求头超限",
+   "desc": "检查是否限制客户端请求头大小和体大小",
+   "why": "不限制请求体大小可被用于 DoS 攻击（发送超大请求耗尽内存/磁盘）",
+   "expected": "client_max_body_size 和 large_client_header_buffers 已配置合理值",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep client_max_body_size"
+   ],
+   "criteria": "client_max_body_size 配置了合理上限（如 10m）",
+   "manual_note": "",
+   "id": "nginx:11"
+  },
+  {
+   "baseline": "nginx",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "nginx:12"
+  },
+  {
+   "baseline": "nginx",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否限制单 IP 并发连接数和请求速率",
+   "why": "不限制连接数可被用于 CC 攻击或慢速攻击（Slowloris），耗尽 Nginx worker 连接",
+   "expected": "limit_conn 和 limit_req 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep 'limit_conn\\|limit_req'"
+   ],
+   "criteria": "配置了 limit_conn_zone 和 limit_req_zone 并在 location 中引用",
+   "manual_note": "",
+   "id": "nginx:13"
+  },
+  {
+   "baseline": "nginx",
+   "category": "七、资源控制",
+   "name": "超时设置",
+   "desc": "检查 keepalive 超时和客户端超时是否合理",
+   "why": "超时过长会导致空闲连接长期占用 worker，增加被慢速攻击利用的风险",
+   "expected": "keepalive_timeout ≤ 65 秒，client_header_timeout/client_body_timeout 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "nginx -T 2>/dev/null | grep 'keepalive_timeout\\|client_header_timeout\\|client_body_timeout'"
+   ],
+   "criteria": "keepalive_timeout ≤ 65 且各超时参数已配置",
+   "manual_note": "",
+   "id": "nginx:14"
+  }
+ ],
+ "apache": [
+  {
+   "baseline": "apache",
+   "category": "一、身份鉴别",
+   "name": "运行用户最小化",
+   "desc": "检查 Apache 进程是否以非 root 用户运行",
+   "why": "以 root 运行的进程被入侵后获得 root 权限；使用低权限用户（如 apache/www-data）可限制破坏范围",
+   "expected": "httpd 进程用户为非 root",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "ps -ef | grep httpd | grep -v grep"
+   ],
+   "criteria": "worker 进程用户为 apache 或 www-data 等非 root 用户",
+   "manual_note": "",
+   "id": "apache:1"
+  },
+  {
+   "baseline": "apache",
+   "category": "一、身份鉴别",
+   "name": "管理界面认证",
+   "desc": "检查 Apache 管理页面或 server-status 是否配置认证",
+   "why": "未认证的 server-status 暴露请求 URL、客户端 IP 等信息",
+   "expected": "server-status 配置了 Require ip 或 auth 认证",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep -A5 'server-status\\|Require'"
+   ],
+   "criteria": "server-status 位置配置了访问控制",
+   "manual_note": "",
+   "id": "apache:2"
+  },
+  {
+   "baseline": "apache",
+   "category": "二、访问控制",
+   "name": "隐藏版本信息",
+   "desc": "检查是否隐藏 Apache 版本号（ServerTokens 和 ServerSignature）",
+   "why": "版本号暴露可让攻击者直接按版本搜索已知漏洞",
+   "expected": "ServerTokens Prod 且 ServerSignature Off",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep -i 'ServerTokens\\|ServerSignature'"
+   ],
+   "criteria": "ServerTokens Prod 或 Full（不显示 OS/模块版本），ServerSignature Off",
+   "manual_note": "",
+   "id": "apache:3"
+  },
+  {
+   "baseline": "apache",
+   "category": "二、访问控制",
+   "name": "目录浏览禁用",
+   "desc": "检查是否禁用目录列表（Options Indexes）",
+   "why": "目录列表暴露 Web 根目录下所有文件",
+   "expected": "Options 配置不含 Indexes",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep -i 'Options.*Indexes'"
+   ],
+   "criteria": "无 Options Indexes 配置",
+   "manual_note": "",
+   "id": "apache:4"
+  },
+  {
+   "baseline": "apache",
+   "category": "二、访问控制",
+   "name": "限制 HTTP 方法",
+   "desc": "检查是否限制不必要的 HTTP 方法",
+   "why": "TRACE 方法可被用于 XST 攻击",
+   "expected": "TraceEnable Off 且仅允许必要方法",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep -i 'TraceEnable\\|LimitExcept'"
+   ],
+   "criteria": "TraceEnable Off",
+   "manual_note": "",
+   "id": "apache:5"
+  },
+  {
+   "baseline": "apache",
+   "category": "三、安全审计",
+   "name": "访问日志启用",
+   "desc": "检查是否启用 access log",
+   "why": "访问日志是事后追溯攻击的唯一依据",
+   "expected": "CustomLog 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep CustomLog"
+   ],
+   "criteria": "CustomLog 配置了日志路径",
+   "manual_note": "",
+   "id": "apache:6"
+  },
+  {
+   "baseline": "apache",
+   "category": "三、安全审计",
+   "name": "错误日志启用",
+   "desc": "检查是否启用 error log",
+   "why": "错误日志记录运行异常和攻击行为",
+   "expected": "ErrorLog 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep ErrorLog"
+   ],
+   "criteria": "ErrorLog 配置了日志路径",
+   "manual_note": "",
+   "id": "apache:7"
+  },
+  {
+   "baseline": "apache",
+   "category": "四、剩余信息保护",
+   "name": "错误页面不泄露信息",
+   "desc": "检查自定义错误页面是否隐藏版本信息",
+   "why": "默认错误页面暴露 Apache 版本和模块信息",
+   "expected": "ErrorDocument 已配置且页面不含版本信息",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep ErrorDocument"
+   ],
+   "criteria": "配置了 ErrorDocument 且页面内容不含版本信息",
+   "manual_note": "",
+   "id": "apache:8"
+  },
+  {
+   "baseline": "apache",
+   "category": "五、入侵防范",
+   "name": "SSL/TLS 协议版本",
+   "desc": "检查是否禁用不安全的 SSL 协议",
+   "why": "SSLv2/SSLv3 存在已知漏洞",
+   "expected": "SSLProtocol 仅包含 TLSv1.2 或更高",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep SSLProtocol"
+   ],
+   "criteria": "SSLProtocol 配置为 -all +TLSv1.2 或更高",
+   "manual_note": "",
+   "id": "apache:9"
+  },
+  {
+   "baseline": "apache",
+   "category": "五、入侵防范",
+   "name": "加密套件配置",
+   "desc": "检查是否配置高强度加密套件",
+   "why": "弱加密套件可被破解",
+   "expected": "SSLCipherSuite 不含 RC4、DES、MD5、EXPORT",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep SSLCipherSuite"
+   ],
+   "criteria": "SSLCipherSuite 配置了 HIGH:!aNULL:!MD5:!RC4 等高强度套件",
+   "manual_note": "",
+   "id": "apache:10"
+  },
+  {
+   "baseline": "apache",
+   "category": "五、入侵防范",
+   "name": "加载安全模块",
+   "desc": "检查是否加载 mod_security 等应用防火墙模块",
+   "why": "mod_security 可检测和拦截 SQL 注入、XSS 等 Web 攻击",
+   "expected": "已加载 mod_security 模块",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -M 2>/dev/null | grep security"
+   ],
+   "criteria": "已加载 mod_security2 或等效 WAF 模块",
+   "manual_note": "",
+   "id": "apache:11"
+  },
+  {
+   "baseline": "apache",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "apache:12"
+  },
+  {
+   "baseline": "apache",
+   "category": "七、资源控制",
+   "name": "超时设置",
+   "desc": "检查 Timeout 和 KeepAlive 超时是否合理",
+   "why": "超时过长导致空闲连接占用资源",
+   "expected": "Timeout ≤ 60 秒，KeepAliveTimeout ≤ 15 秒",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep -i 'Timeout\\|KeepAlive'"
+   ],
+   "criteria": "Timeout ≤ 60 且 KeepAliveTimeout ≤ 15",
+   "manual_note": "",
+   "id": "apache:13"
+  },
+  {
+   "baseline": "apache",
+   "category": "七、资源控制",
+   "name": "请求体大小限制",
+   "desc": "检查 LimitRequestBody 是否配置",
+   "why": "不限制请求体大小可被用于 DoS 攻击",
+   "expected": "LimitRequestBody 已配置合理值",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "httpd -S 2>/dev/null | grep LimitRequestBody"
+   ],
+   "criteria": "配置了 LimitRequestBody 上限",
+   "manual_note": "",
+   "id": "apache:14"
+  }
+ ],
+ "tomcat": [
+  {
+   "baseline": "tomcat",
+   "category": "一、身份鉴别",
+   "name": "管理界面认证",
+   "desc": "检查 Tomcat Manager/H Host Manager 是否配置认证和强密码",
+   "why": "默认或弱密码的管理界面可被直接登录部署 WAR 包，获取服务器控制权",
+   "expected": "Manager 和 Host Manager 配置了认证且密码符合复杂度要求",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/tomcat-users.xml | grep -i 'manager\\|admin'"
+   ],
+   "criteria": "配置了角色和用户认证，无默认密码（tomcat/changeme 等）",
+   "manual_note": "",
+   "id": "tomcat:1"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "一、身份鉴别",
+   "name": "关闭默认示例",
+   "desc": "检查是否删除默认示例应用（docs/examples/manager）",
+   "why": "示例应用含已知漏洞且暴露 Tomcat 路径信息",
+   "expected": "webapps 目录下无 docs/examples/ROOT 示例",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "ls $CATALINA_HOME/webapps/"
+   ],
+   "criteria": "无 docs、examples 目录",
+   "manual_note": "",
+   "id": "tomcat:2"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "二、访问控制",
+   "name": "隐藏版本信息",
+   "desc": "检查是否隐藏 Tomcat 版本号",
+   "why": "版本号暴露可让攻击者按版本搜索漏洞",
+   "expected": "Server.xml 中 Connector 配置了 server 属性或修改了版本",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'server='"
+   ],
+   "criteria": "Connector 配置了 server 自定义值（非 Apache-Coyote/1.1）",
+   "manual_note": "",
+   "id": "tomcat:3"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "二、访问控制",
+   "name": "禁用 WAR 自动部署",
+   "desc": "检查是否关闭 autoDeploy 和 deployOnStartup",
+   "why": "自动部署可被利用上传恶意 WAR 包获取 shell",
+   "expected": "autoDeploy=false 且 deployOnStartup=false",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'autoDeploy\\|deployOnStartup'"
+   ],
+   "criteria": "autoDeploy=false deployOnStartup=false",
+   "manual_note": "",
+   "id": "tomcat:4"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "三、安全审计",
+   "name": "访问日志启用",
+   "desc": "检查是否启用 AccessLogValve",
+   "why": "访问日志是事后追溯的依据",
+   "expected": "server.xml 中配置了 AccessLogValve",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'AccessLogValve'"
+   ],
+   "criteria": "配置了 AccessLogValve 且 pattern 包含客户端 IP、时间、请求、状态码",
+   "manual_note": "",
+   "id": "tomcat:5"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "四、剩余信息保护",
+   "name": "错误页面不泄露信息",
+   "desc": "检查是否配置自定义错误页面",
+   "why": "默认错误页面暴露 Tomcat 版本和堆栈信息",
+   "expected": "web.xml 中配置了 error-page 且页面不含版本/堆栈信息",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/web.xml | grep -A3 'error-page'"
+   ],
+   "criteria": "配置了 404/500 等错误页面重定向",
+   "manual_note": "",
+   "id": "tomcat:6"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "五、入侵防范",
+   "name": "禁用不必要 Connector",
+   "desc": "检查是否禁用 AJP Connector 或配置 secret",
+   "why": "AJP Connector（8009端口）历史上存在 Ghostcat（CVE-2020-1938）漏洞，可读取 Web 应用文件",
+   "expected": "AJP Connector 已禁用或配置了 secret 属性",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'ajp\\|protocol.*ajp'"
+   ],
+   "criteria": "AJP Connector 已注释/删除，或配置了 secret 且 address 限定为 127.0.0.1",
+   "manual_note": "",
+   "id": "tomcat:7"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "五、入侵防范",
+   "name": "SSL/TLS 配置",
+   "desc": "检查 HTTPS Connector 的 SSL 配置",
+   "why": "弱 SSL 配置可被中间人攻击",
+   "expected": "sslEnabledProtocols 仅包含 TLSv1.2+，ciphers 不含弱套件",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'sslEnabledProtocols\\|ciphers'"
+   ],
+   "criteria": "sslEnabledProtocols=TLSv1.2+ 且 ciphers 不含 RC4/MD5/DES",
+   "manual_note": "",
+   "id": "tomcat:8"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "tomcat:9"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "七、资源控制",
+   "name": "连接超时设置",
+   "desc": "检查 connectionTimeout 是否配置合理值",
+   "why": "超时过长导致空闲连接占用线程池",
+   "expected": "connectionTimeout ≤ 20000（20秒）",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'connectionTimeout'"
+   ],
+   "criteria": "connectionTimeout ≤ 20000",
+   "manual_note": "",
+   "id": "tomcat:10"
+  },
+  {
+   "baseline": "tomcat",
+   "category": "七、资源控制",
+   "name": "最大线程数限制",
+   "desc": "检查 maxThreads 是否配置合理值",
+   "why": "不限制线程数可被 DoS 攻击耗尽资源",
+   "expected": "maxThreads 已配置合理上限（如 200-500）",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $CATALINA_HOME/conf/server.xml | grep -i 'maxThreads'"
+   ],
+   "criteria": "maxThreads 配置了合理上限",
+   "manual_note": "",
+   "id": "tomcat:11"
+  }
+ ],
+ "weblogic": [
+  {
+   "baseline": "weblogic",
+   "category": "一、身份鉴别",
+   "name": "控制台认证与密码",
+   "desc": "检查 WebLogic 控制台是否配置认证且密码符合复杂度要求",
+   "why": "默认或弱密码的控制台可被直接登录部署应用获取服务器控制权",
+   "expected": "控制台已配置认证且密码满足复杂度要求",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 $DOMAIN_HOME/servers/AdminServer/data/ 或控制台 → 安全 → 用户"
+   ],
+   "criteria": "无 weblogic/weblogic 等默认密码，密码长度≥8 且含大小写+数字+特殊字符",
+   "manual_note": "",
+   "id": "weblogic:1"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "一、身份鉴别",
+   "name": "控制台端口修改",
+   "desc": "检查控制台端口是否为非默认端口",
+   "why": "默认端口 7001 是扫描器的固定探测目标",
+   "expected": "控制台端口非 7001",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 $DOMAIN_HOME/config/config.xml | grep -i 'listen-port'"
+   ],
+   "criteria": "listen-port 非 7001",
+   "manual_note": "",
+   "id": "weblogic:2"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "一、身份鉴别",
+   "name": "控制台 SSL 启用",
+   "desc": "检查控制台是否启用 SSL",
+   "why": "未加密的控制台通信可被中间人截获管理凭据",
+   "expected": "控制台已启用 SSL",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 config.xml | grep -i 'ssl\\|secured'"
+   ],
+   "criteria": "Admin Server 配置了 SSL 监听端口",
+   "manual_note": "",
+   "id": "weblogic:3"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "二、访问控制",
+   "name": "控制台访问限制",
+   "desc": "检查控制台是否限制访问 IP",
+   "why": "不限制来源时任何 IP 可尝试登录控制台",
+   "expected": "控制台配置了 IP 限制或仅内网可访问",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看控制台 → 服务器 → AdminServer → 通道 → 网络访问限制"
+   ],
+   "criteria": "配置了 IP 限制或通过防火墙限制访问来源",
+   "manual_note": "",
+   "id": "weblogic:4"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "二、访问控制",
+   "name": "关闭示例应用",
+   "desc": "检查是否删除默认示例应用",
+   "why": "示例应用含已知漏洞",
+   "expected": "无默认示例应用",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看部署列表"
+   ],
+   "criteria": "无 examplesWebApp 等",
+   "manual_note": "",
+   "id": "weblogic:5"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用 WebLogic 审计日志",
+   "why": "审计日志记录管理操作和访问行为，是追溯依据",
+   "expected": "审计日志已启用",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "控制台 → 安全领域 → myrealm → 审计"
+   ],
+   "criteria": "审计提供程序已启用",
+   "manual_note": "",
+   "id": "weblogic:6"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "四、剩余信息保护",
+   "name": "错误页面不泄露信息",
+   "desc": "检查是否配置自定义错误页面",
+   "why": "默认错误页面暴露 WebLogic 版本和堆栈信息",
+   "expected": "配置了自定义错误页面",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 web.xml 或 weblogic.xml 中的 error-page"
+   ],
+   "criteria": "配置了错误页面且不含版本/堆栈信息",
+   "manual_note": "",
+   "id": "weblogic:7"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "五、入侵防范",
+   "name": "补丁管理",
+   "desc": "检查是否安装最新 CPU 补丁",
+   "why": "WebLogic 历史上多次出现反序列化漏洞（如 CVE-2017-10271），未打补丁可被远程执行代码",
+   "expected": "已安装近期 CPU 补丁",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 WebLogic 版本和已安装补丁"
+   ],
+   "criteria": "版本为最新且已安装近期 CPU 补丁",
+   "manual_note": "",
+   "id": "weblogic:8"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "五、入侵防范",
+   "name": "禁用 T3 协议外部访问",
+   "desc": "检查 T3 协议是否限制外部访问",
+   "why": "T3 协议是反序列化漏洞的主要利用通道",
+   "expected": "T3 协议仅限本机或内网访问",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看网络通道或防火墙规则中 T3 端口限制"
+   ],
+   "criteria": "T3 端口（如 7001/8001）仅限 127.0.0.1 或内网网段访问",
+   "manual_note": "",
+   "id": "weblogic:9"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "weblogic:10"
+  },
+  {
+   "baseline": "weblogic",
+   "category": "七、资源控制",
+   "name": "连接超时设置",
+   "desc": "检查连接超时是否合理",
+   "why": "超时过长导致空闲连接占用资源",
+   "expected": "连接超时 ≤ 60 秒",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server 配置中的超时参数"
+   ],
+   "criteria": "超时参数配置合理",
+   "manual_note": "",
+   "id": "weblogic:11"
+  }
+ ],
+ "kafka": [
+  {
+   "baseline": "kafka",
+   "category": "一、身份鉴别",
+   "name": "SASL 认证",
+   "desc": "检查 Kafka 是否启用 SASL 认证（PLAIN/SCRAM/GSSAPI）",
+   "why": "无认证的 Kafka 可被任意客户端连接并读/写/删除 Topic，导致数据泄露或篡改",
+   "expected": "已配置 SASL 认证机制",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 sasl.enabled.mechanisms 和 listener.security.protocol.map"
+   ],
+   "criteria": "配置了 SASL_PLAINTEXT 或 SASL_SSL 监听器且启用了认证",
+   "manual_note": "",
+   "id": "kafka:1"
+  },
+  {
+   "baseline": "kafka",
+   "category": "一、身份鉴别",
+   "name": "Admin 用户密码复杂度",
+   "desc": "检查 admin 用户密码是否满足复杂度要求",
+   "why": "弱密码可被暴力破解获取 Kafka 管理权限",
+   "expected": "admin 用户密码长度≥8 且含大小写+数字+特殊字符",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 JAAS 配置文件中 admin 密码"
+   ],
+   "criteria": "密码满足复杂度要求",
+   "manual_note": "",
+   "id": "kafka:2"
+  },
+  {
+   "baseline": "kafka",
+   "category": "二、访问控制",
+   "name": "ACL 权限控制",
+   "desc": "检查是否启用 ACL 权限控制",
+   "why": "无 ACL 时任何已认证用户可操作所有 Topic，缺乏最小权限隔离",
+   "expected": "已配置 ACL 且启用 authorizer",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 authorizer.class.name"
+   ],
+   "criteria": "配置了 kafka.security.authorizer.AclAuthorizer 或 StandardAuthorizer",
+   "manual_note": "",
+   "id": "kafka:3"
+  },
+  {
+   "baseline": "kafka",
+   "category": "二、访问控制",
+   "name": "Zookeeper 认证",
+   "desc": "检查 Zookeeper 是否配置认证",
+   "why": "无认证的 Zookeeper 可被任意客户端修改 Kafka 元数据（如删除 Topic）",
+   "expected": "Zookeeper 配置了 SASL 认证或 digest 认证",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 zookeeper.set.acl=true"
+   ],
+   "criteria": "zookeeper.set.acl=true",
+   "manual_note": "",
+   "id": "kafka:4"
+  },
+  {
+   "baseline": "kafka",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用 Kafka 审计日志",
+   "why": "审计日志记录 Topic 创建/删除/权限变更等管理操作",
+   "expected": "已配置审计日志",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 log4j 审计配置"
+   ],
+   "criteria": "配置了审计日志且记录了管理操作",
+   "manual_note": "",
+   "id": "kafka:5"
+  },
+  {
+   "baseline": "kafka",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "消息队列中间件不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "消息队列中间件不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "kafka:6"
+  },
+  {
+   "baseline": "kafka",
+   "category": "五、入侵防范",
+   "name": "SSL/TLS 加密通信",
+   "desc": "检查 Broker 间和客户端通信是否启用 SSL/TLS",
+   "why": "明文通信可被中间人截获消息内容",
+   "expected": "配置了 SSL 监听器或 SSL 互连",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 ssl.​ 开头的配置项"
+   ],
+   "criteria": "listeners 配置了 SSL 或 listener.name.internal.ssl",
+   "manual_note": "",
+   "id": "kafka:7"
+  },
+  {
+   "baseline": "kafka",
+   "category": "五、入侵防范",
+   "name": "限制监听地址",
+   "desc": "检查 listeners 是否限定监听地址",
+   "why": "监听 0.0.0.0 可被外部网络直接访问",
+   "expected": "listeners 配置了内网 IP 非 0.0.0.0",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "查看 server.properties 中 listeners"
+   ],
+   "criteria": "listeners 配置了具体 IP 非 0.0.0.0",
+   "manual_note": "",
+   "id": "kafka:8"
+  },
+  {
+   "baseline": "kafka",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "kafka:9"
+  },
+  {
+   "baseline": "kafka",
+   "category": "七、资源控制",
+   "name": "Topic 配额限制",
+   "desc": "检查是否配置生产/消费配额",
+   "why": "不限制速率可被单个客户端耗尽 Broker 资源",
+   "expected": "配置了 quota 配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "kafka-configs.sh --describe --entity-type clients"
+   ],
+   "criteria": "配置了 producer_bytes_rate 或 consumer_bytes_rate",
+   "manual_note": "",
+   "id": "kafka:10"
+  }
+ ],
+ "redis_mw": [
+  {
+   "baseline": "redis_mw",
+   "category": "一、身份鉴别",
+   "name": "密码认证",
+   "desc": "检查 Redis 是否配置密码认证",
+   "why": "无密码的 Redis 可被任意连接并读/写/删除数据，历史上大量 Redis 被入侵后写入 SSH 公钥或定时任务挖矿",
+   "expected": "已配置 requirepass 且密码满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET requirepass"
+   ],
+   "criteria": "requirepass 非空且密码长度≥8",
+   "manual_note": "",
+   "id": "redis_mw:1"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "二、访问控制",
+   "name": "监听地址限制",
+   "desc": "检查 Redis 是否限定监听地址",
+   "why": "监听 0.0.0.0 可被外部网络直接访问，是无认证 Redis 被入侵的最常见原因",
+   "expected": "bind 配置了内网 IP 非 0.0.0.0",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET bind"
+   ],
+   "criteria": "bind 配置了具体 IP 非 0.0.0.0",
+   "manual_note": "",
+   "id": "redis_mw:2"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "二、访问控制",
+   "name": "危险命令禁用/重命名",
+   "desc": "检查是否重命名或禁用 FLUSHALL/CONFIG/KEYS 等危险命令",
+   "why": "未认证/低权限用户可使用 FLUSHALL 清空所有数据，CONFIG 可修改运行时配置",
+   "expected": "FLUSHALL/CONFIG/KEYS 已重命名或禁用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET rename-command"
+   ],
+   "criteria": "rename-command FLUSHALL \"\" 或已重命名",
+   "manual_note": "",
+   "id": "redis_mw:3"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "三、安全审计",
+   "name": "慢查询日志",
+   "desc": "检查是否启用慢查询日志",
+   "why": "慢查询日志可发现异常的大 key 操作（如数据泄露或攻击探测）",
+   "expected": "slowlog-log-slower-than 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET slowlog-log-slower-than"
+   ],
+   "criteria": "slowlog 配置了合理阈值（如 10000 微秒）",
+   "manual_note": "",
+   "id": "redis_mw:4"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "缓存中间件不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "缓存中间件不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "redis_mw:5"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "五、入侵防范",
+   "name": "TLS 加密",
+   "desc": "检查是否启用 TLS 或在安全网络环境中运行",
+   "why": "明文通信可被中间人截获缓存数据",
+   "expected": "已配置 TLS 或运行在受信内网/隧道中",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET tls-port"
+   ],
+   "criteria": "tls-port > 0 或确认运行在受信内网",
+   "manual_note": "",
+   "id": "redis_mw:6"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 Redis 版本是否有已知高危漏洞",
+   "why": "旧版本 Redis 存在多个安全漏洞（如 CVE-2022-0543 沙箱逃逸）",
+   "expected": "Redis 版本为最新稳定版",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli INFO | grep redis_version"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "redis_mw:7"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "redis_mw:8"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "七、资源控制",
+   "name": "最大内存限制",
+   "desc": "检查是否配置 maxmemory",
+   "why": "不限制内存可被数据膨胀耗尽主机内存导致服务不可用",
+   "expected": "maxmemory 已配置合理值",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET maxmemory"
+   ],
+   "criteria": "maxmemory > 0",
+   "manual_note": "",
+   "id": "redis_mw:9"
+  },
+  {
+   "baseline": "redis_mw",
+   "category": "七、资源控制",
+   "name": "最大客户端连接数",
+   "desc": "检查是否配置 maxclients",
+   "why": "不限制连接数可被 DoS 攻击耗尽文件描述符",
+   "expected": "maxclients 已配置合理值",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "redis-cli CONFIG GET maxclients"
+   ],
+   "criteria": "maxclients 配置了合理上限（如 1000）",
+   "manual_note": "",
+   "id": "redis_mw:10"
+  }
+ ],
+ "rabbitmq": [
+  {
+   "baseline": "rabbitmq",
+   "category": "一、身份鉴别",
+   "name": "管理界面认证",
+   "desc": "检查 RabbitMQ 管理界面是否配置认证和强密码",
+   "why": "默认 guest/guest 账户可被直接登录获取管理权限",
+   "expected": "无默认 guest 密码，管理用户密码满足复杂度",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl list_users"
+   ],
+   "criteria": "无 guest/guest 默认密码，管理员密码满足复杂度",
+   "manual_note": "",
+   "id": "rabbitmq:1"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "一、身份鉴别",
+   "name": "SASL 认证",
+   "desc": "检查 AMQP 连接是否配置认证",
+   "why": "无认证的 AMQP 连接可被任意客户端发送/消费消息",
+   "expected": "已配置 SASL 认证",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl environment | grep auth"
+   ],
+   "criteria": "配置了认证后端且非 anonymous",
+   "manual_note": "",
+   "id": "rabbitmq:2"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "二、访问控制",
+   "name": "管理界面访问限制",
+   "desc": "检查管理界面是否限制访问 IP",
+   "why": "管理界面不限制来源可被外部直接尝试登录",
+   "expected": "管理界面配置了 IP 限制",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 rabbitmq.conf 中 management.tcp.ip"
+   ],
+   "criteria": "management.tcp.ip 非 0.0.0.0",
+   "manual_note": "",
+   "id": "rabbitmq:3"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "二、访问控制",
+   "name": "VHost 权限隔离",
+   "desc": "检查是否按应用划分 VHost 并配置权限",
+   "why": "不隔离 VHost 时所有应用共享同一消息空间，缺乏权限隔离",
+   "expected": "配置了多个 VHost 且按应用分配权限",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl list_vhosts"
+   ],
+   "criteria": "配置了多个 VHost 且非全部使用默认 / VHost",
+   "manual_note": "",
+   "id": "rabbitmq:4"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用 RabbitMQ 审计日志",
+   "why": "审计日志记录用户登录、VHost/Exchange 创建删除等管理操作",
+   "expected": "审计日志已启用",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl environment | grep log"
+   ],
+   "criteria": "配置了审计日志级别",
+   "manual_note": "",
+   "id": "rabbitmq:5"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "消息队列中间件不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "消息队列中间件不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "rabbitmq:6"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "五、入侵防范",
+   "name": "TLS 加密",
+   "desc": "检查是否启用 TLS 通信",
+   "why": "明文 AMQP 通信可被中间人截获消息内容",
+   "expected": "已配置 TLS 监听器",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl environment | grep ssl"
+   ],
+   "criteria": "配置了 SSL/TLS 监听器",
+   "manual_note": "",
+   "id": "rabbitmq:7"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "rabbitmq:8"
+  },
+  {
+   "baseline": "rabbitmq",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否配置最大连接数",
+   "why": "不限制连接数可被 DoS 攻击耗尽资源",
+   "expected": "max_connections 已配置",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "rabbitmqctl environment | grep max_connections"
+   ],
+   "criteria": "max_connections 配置了合理上限",
+   "manual_note": "",
+   "id": "rabbitmq:9"
+  }
+ ],
+ "nacos": [
+  {
+   "baseline": "nacos",
+   "category": "一、身份鉴别",
+   "name": "控制台认证",
+   "desc": "检查 Nacos 是否启用认证",
+   "why": "Nacos 未启用认证时（nacos.core.auth.enabled=false）可被任意访问读取/修改配置，历史上多次导致数据泄露",
+   "expected": "nacos.core.auth.enabled=true",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "cat $NACOS_HOME/conf/application.properties | grep auth"
+   ],
+   "criteria": "nacos.core.auth.enabled=true",
+   "manual_note": "",
+   "id": "nacos:1"
+  },
+  {
+   "baseline": "nacos",
+   "category": "一、身份鉴别",
+   "name": "默认密码修改",
+   "desc": "检查是否修改默认管理员密码",
+   "why": "默认 nacos/nacos 密码可被直接登录获取管理权限",
+   "expected": "管理员密码已修改且满足复杂度",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "尝试登录控制台或查看数据库 users 表"
+   ],
+   "criteria": "无 nacos/nacos 默认密码",
+   "manual_note": "",
+   "id": "nacos:2"
+  },
+  {
+   "baseline": "nacos",
+   "category": "二、访问控制",
+   "name": "控制台访问限制",
+   "desc": "检查 Nacos 控制台是否限制访问 IP",
+   "why": "不限制来源时任何 IP 可尝试登录控制台",
+   "expected": "控制台通过防火墙或代理限制访问来源",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查防火墙规则或 Nginx 代理配置"
+   ],
+   "criteria": "控制台端口（8848）仅限内网/管理网段访问",
+   "manual_note": "",
+   "id": "nacos:3"
+  },
+  {
+   "baseline": "nacos",
+   "category": "二、访问控制",
+   "name": "API Token 认证",
+   "desc": "检查 OpenAPI 是否启用 Token 认证",
+   "why": "未认证的 OpenAPI 可被任意调用读取配置/注册服务",
+   "expected": "OpenAPI 配置了 Token 认证",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 application.properties 中 nacos.core.auth.enabled"
+   ],
+   "criteria": "enabled=true 且配置了 identity key/value",
+   "manual_note": "",
+   "id": "nacos:4"
+  },
+  {
+   "baseline": "nacos",
+   "category": "三、安全审计",
+   "name": "审计日志启用",
+   "desc": "检查是否启用操作审计日志",
+   "why": "审计日志记录配置变更、服务注册/注销等操作",
+   "expected": "审计日志已启用",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 $NACOS_HOME/logs/ 目录"
+   ],
+   "criteria": "存在操作日志且记录了配置变更",
+   "manual_note": "",
+   "id": "nacos:5"
+  },
+  {
+   "baseline": "nacos",
+   "category": "四、剩余信息保护",
+   "name": "（不适用）四、剩余信息保护",
+   "desc": "注册中心不涉及剩余信息保护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "注册中心不涉及剩余信息保护",
+   "manual_note": "",
+   "id": "nacos:6"
+  },
+  {
+   "baseline": "nacos",
+   "category": "五、入侵防范",
+   "name": "版本安全",
+   "desc": "检查 Nacos 版本是否有已知漏洞",
+   "why": "Nacos 历史上存在身份绕过（CVE-2021-29441）等漏洞",
+   "expected": "Nacos 版本为最新且无已知高危漏洞",
+   "mode": "命令可查",
+   "content": "",
+   "commands": [
+    "curl http://localhost:8848/nacos/v1/console/server/state | grep version"
+   ],
+   "criteria": "版本无已知高危漏洞",
+   "manual_note": "",
+   "id": "nacos:7"
+  },
+  {
+   "baseline": "nacos",
+   "category": "六、恶意代码防范",
+   "name": "（不适用）六、恶意代码防范",
+   "desc": "中间件层不直接提供恶意代码防护",
+   "why": "",
+   "expected": "",
+   "mode": "不适用",
+   "content": "",
+   "commands": [],
+   "criteria": "中间件层不直接提供恶意代码防护",
+   "manual_note": "",
+   "id": "nacos:8"
+  },
+  {
+   "baseline": "nacos",
+   "category": "七、资源控制",
+   "name": "连接数限制",
+   "desc": "检查是否配置连接数限制",
+   "why": "不限制连接数可被 DoS 攻击",
+   "expected": "配置了连接数上限",
+   "mode": "人工核查",
+   "content": "",
+   "commands": [
+    "检查 application.properties 中连接池配置"
+   ],
+   "criteria": "配置了合理的连接池上限",
+   "manual_note": "",
+   "id": "nacos:9"
+  }
+ ]
+}

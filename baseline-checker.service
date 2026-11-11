@@ -1,0 +1,15 @@
+[Unit]
+Description=Security Baseline Checker (安全基线检查系统)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/security-baseline
+ExecStart=/opt/security-baseline/venv/bin/python app.py
+Restart=always
+RestartSec=5
+User=blchecker
+Group=blchecker
+
+[Install]
+WantedBy=multi-user.target
