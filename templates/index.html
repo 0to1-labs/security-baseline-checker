@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}检查任务 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>检查任务</h1>
+<p><a class="btn" href="/check/new">+ 发起检查</a> <a class="btn gray" href="/schedules">定时任务</a></p>
+
+{% if groups %}
+<div class="card" style="padding:0;overflow:auto">
+<table>
+  <tr><th>批量运行</th><th>主机数</th><th>任务</th><th>符合</th><th>不符合</th><th>不适用</th><th>待人工</th><th>时间</th><th>操作</th></tr>
+  {% for g in groups %}
+  <tr>
+    <td><b>{{ g.name }}</b>{% if g.schedule_id %} <span class="badge b-running">定时</span>{% endif %}</td>
+    <td>{{ g.hosts }}</td>
+    <td>{{ g.tasks|length }} <span class="muted">（完成 {{ g.agg.done }}{% if g.agg.running %} / 进行中 {{ g.agg.running }}{% endif %}{% if g.agg.error %} / 失败 {{ g.agg.error }}{% endif %}）</span></td>
+    <td>{{ g.agg.pass }}</td>
+    <td style="color:#c62828">{{ g.agg.fail }}</td>
+    <td>{{ g.agg.na }}</td>
+    <td style="color:#ef6c00">{{ g.agg.manual }}</td>
+    <td class="muted">{{ g.created_at }}</td>
+    <td><a class="btn small" href="/run/{{ g.id }}">查看</a></td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<br>
+{% endif %}
+
+<h2>单次检查</h2>
+<div class="card" style="padding:0;overflow:auto">
+<table>
+  <tr><th>ID</th><th>目标主机</th><th>基线类型</th><th>状态</th><th>进度</th><th>符合</th><th>不符合</th><th>不适用</th><th>待人工</th><th>时间</th><th>操作</th></tr>
+  {% for t in tasks %}
+  <tr>
+    <td>{{ t.id }}</td>
+    <td>{{ t.hname or '?' }}<br><span class="muted">{{ t.ip or '' }}</span></td>
+    <td>{{ baselines[t.baseline].name if t.baseline in baselines else t.baseline }}</td>
+    <td><span class="badge b-{{ t.status }}">{{ {'done':'完成','running':'进行中','pending':'排队','error':'失败'}[t.status] }}</span></td>
+    <td>{{ t.progress }}/{{ t.total }}</td>
+    <td>{{ t.stats.get('pass',0) }}</td>
+    <td style="color:#c62828">{{ t.stats.get('fail',0) }}</td>
+    <td>{{ t.stats.get('na',0) }}</td>
+    <td style="color:#ef6c00">{{ t.stats.get('manual',0) }}</td>
+    <td class="muted">{{ t.created_at }}{% if t.status=='error' %}<br><span class="err">{{ t.message }}</span>{% endif %}</td>
+    <td>
+      <a class="btn small" href="/task/{{ t.id }}">查看</a>
+      <form style="display:inline" method="post" action="/task/{{ t.id }}/delete" onsubmit="return confirm('删除该任务及全部结果？')">
+        <button class="btn red">删除</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="11" style="text-align:center;padding:30px">暂无检查任务，点上方"发起检查"开始</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}
