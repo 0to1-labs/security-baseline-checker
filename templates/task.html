@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% block title %}检查结果 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>检查结果 <span class="muted">#{{ task.id }} {{ task.hname }}（{{ task.ip }}）· {{ bl_name }}</span></h1>
+
+{% if task.status != 'done' %}
+<div class="card" id="running">
+  <div><b id="msg">{{ task.message }}</b></div>
+  <div class="progress"><i id="pbar" style="width:{{ (task.progress/task.total*100)|round(0) if task.total else 0 }}%"></i></div>
+  <div class="muted" id="ptext">{{ task.progress }}/{{ task.total }} 项</div>
+</div>
+<script>
+let tid = {{ task.id }};
+setInterval(async () => {
+  const r = await (await fetch(`/task/${tid}/status`)).json();
+  document.getElementById('msg').textContent = r.message || '';
+  document.getElementById('pbar').style.width = (r.progress / r.total * 100) + '%';
+  document.getElementById('ptext').textContent = `${r.progress}/${r.total} 项`;
+  if (r.status === 'done' || r.status === 'error') location.reload();
+}, 2000);
+</script>
+{% endif %}
+
+<div class="stat">
+  <div class="s"><b class="rate">{{ rate }}</b><span>符合率</span></div>
+  <div class="s"><b style="color:#2e7d32">{{ stats.pass }}</b><span>符合</span></div>
+  <div class="s"><b style="color:#c62828">{{ stats.fail }}</b><span>不符合</span></div>
+  <div class="s"><b style="color:#90a4ae">{{ stats.na }}</b><span>不适用</span></div>
+  <div class="s"><b style="color:#ef6c00">{{ stats.manual }}</b><span>待人工</span></div>
+  <div class="s"><b>{{ task.created_at }}</b><span>检查时间</span></div>
+  <div class="s" style="display:flex;align-items:center"><a class="btn green" href="/task/{{ task.id }}/export">导出 Word 报告</a></div>
+</div>
+
+<div class="card">
+  <h2>分类汇总</h2>
+  <table>
+    <tr><th>类别</th><th>检查项数</th><th>符合</th><th>不符合</th><th>不适用</th><th>待人工</th><th>符合率</th></tr>
+    {% for cat, c in cats.items() %}
+    <tr>
+      <td>{{ cat }}</td><td>{{ c.total }}</td>
+      <td>{{ c.pass }}</td><td style="color:#c62828">{{ c.fail }}</td>
+      <td>{{ c.na }}</td><td style="color:#ef6c00">{{ c.manual }}</td>
+      <td>{{ ((c.pass/(c.pass+c.fail)*100)|round(0)|string + '%') if c.pass + c.fail else '-' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<h2>检查明细</h2>
+<div class="filters" id="fl">
+  <a href="#" data-f="all" class="on">全部（{{ results|length }}）</a>
+  <a href="#" data-f="fail" style="color:#c62828">不符合（{{ stats.fail }}）</a>
+  <a href="#" data-f="manual">待人工（{{ stats.manual }}）</a>
+  <a href="#" data-f="pass">符合（{{ stats.pass }}）</a>
+  <a href="#" data-f="na">不适用（{{ stats.na }}）</a>
+  <span class="muted">判定以指导书"通过标准"为依据；待人工项请结合命令输出人工确认后点击判定按钮。</span>
+</div>
+<script>
+document.querySelectorAll('#fl a').forEach(a => a.onclick = e => {
+  e.preventDefault();
+  document.querySelectorAll('#fl a').forEach(x => x.classList.remove('on'));
+  a.classList.add('on');
+  const f = a.dataset.f;
+  document.querySelectorAll('.item-row').forEach(tr => {
+    tr.style.display = (f === 'all' || tr.dataset.verdict === f) ? '' : 'none';
+  });
+});
+function setVerdict(item, v, btn) {
+  const tid = {{ task.id }};
+  fetch(`/task/${tid}/verdict`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({item, verdict: v})}).then(() => location.reload());
+}
+</script>
+
+<table>
+  <tr><th style="width:170px">类别</th><th>检查项 / 检查输出</th><th style="width:150px">判定</th></tr>
+  {% for r in results %}
+  {% set v = r.manual or r.verdict %}
+  {% set det = r.detail | tojson %}
+  <tr class="item-row" data-verdict="{{ v }}">
+    <td>{{ r.category }}<br><span class="muted">{{ {'命令可查':'自动','命令可查*':'自动','部分人工':'半自动','人工核查':'人工','不适用':'不适用'}[r.mode] if r.mode else '' }}</span></td>
+    <td>
+      <b>{{ r.name }}</b>
+      {% if r.criteria %}<div class="criteria">通过标准：{{ r.criteria }}</div>{% endif %}
+      {% if r.expected %}<div class="criteria">预期结果：{{ r.expected }}</div>{% endif %}
+      {% if r.why %}<details><summary>为什么要检查这项</summary><div class="why">{{ r.why }}</div></details>{% endif %}
+      {% if v == 'fail' and r.auto == 'fail' %}<div class="err" style="margin-top:4px">⚠ 自动判定：不符合</div>{% endif %}
+      <details style="margin-top:6px">
+        <summary>检查命令与输出（{{ det.steps|length if det.steps else 0 }} 条命令）</summary>
+        {% for s in det.steps %}
+          {% if s.exec %}
+            <pre>$ {{ s.cmd }}
+{{ s.out }}{% if s.err %}
+
+[stderr] {{ s.err }}{% endif %}</pre>
+          {% else %}
+            <div class="guide">人工核查指引：{{ s.cmd }}</div>
+          {% endif %}
+        {% else %}
+        <div class="guide">{{ r.criteria or '本项无自动化命令，按指导书人工核查' }}</div>
+        {% endfor %}
+      </details>
+    </td>
+    <td>
+      <span class="badge b-{{ v }}">{{ vc[v] }}</span>
+      <div class="verdict-btns" style="margin-top:8px">
+        <button onclick="setVerdict('{{ r.item_id }}','pass',this)" class="{{ 'on-pass' if v=='pass' }}">符合</button>
+        <button onclick="setVerdict('{{ r.item_id }}','fail',this)" class="{{ 'on-fail' if v=='fail' }}">不符合</button>
+        <button onclick="setVerdict('{{ r.item_id }}','na',this)" class="{{ 'on-na' if v=='na' }}">不适用</button>
+      </div>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}
