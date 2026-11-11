@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}检查库 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>基线检查库</h1>
+<div class="filters" id="fl">
+  {% for k, v in baselines.items() %}
+  <a href="/library?b={{ k }}" class="{{ 'on' if cur == k }}">{{ v.name }}（{{ items|length if cur==k }}）</a>
+  {% endfor %}
+</div>
+<div class="card" style="padding:0;overflow:auto">
+<table>
+  <tr><th style="width:170px">类别</th><th>检查项</th><th style="width:150px">方式</th></tr>
+  {% for it in items %}
+  <tr>
+    <td>{{ it.category }}</td>
+    <td>
+      <b>{{ it.name }}</b>
+      <div class="muted" style="margin-top:4px">{{ it.desc }}</div>
+      {% if it.criteria %}<div class="criteria">通过标准：{{ it.criteria }}</div>{% endif %}
+      {% for c in it.commands %}<pre>$ {{ c }}</pre>{% endfor %}
+      {% if it.manual_note %}<div class="guide">需人工核实：{{ it.manual_note }}</div>{% endif %}
+    </td>
+    <td>{{ {'命令可查':'自动判定','命令可查*':'自动判定','部分人工':'半自动','人工核查':'人工核查','不适用':'不适用'}[it.mode] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}
