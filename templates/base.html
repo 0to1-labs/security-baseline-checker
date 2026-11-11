@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}安全基线检查系统{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{% if session.get('uid') %}
+<nav>
+  <div class="brand">🛡 安全基线检查系统</div>
+  <a href="/" class="{{ 'active' if request.path == '/' }}">检查任务</a>
+  <a href="/check/new" class="{{ 'active' if request.path == '/check/new' }}">发起检查</a>
+  <a href="/schedules" class="{{ 'active' if request.path == '/schedules' }}">定时任务</a>
+  <a href="/hosts" class="{{ 'active' if request.path == '/hosts' }}">主机管理</a>
+  <a href="/library" class="{{ 'active' if request.path == '/library' }}">检查库</a>
+  <span class="spacer"></span>
+  <span class="user">{{ session.username }}</span>
+  <a href="/password">改密</a>
+  <a href="/logout">退出</a>
+</nav>
+{% endif %}
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>
