@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}发起检查 - 安全基线检查系统{% endblock %}
+{% block content %}
+<h1>发起检查</h1>
+<div class="card" style="max-width:900px">
+<form method="post">
+  <label>目标主机（可多选，多选即批量检查）</label>
+  <div style="max-height:260px;overflow:auto;border:1px solid #c3cfdd;border-radius:6px;padding:10px" id="hostbox">
+    {% for h in hosts %}
+    <label style="display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px;color:#263238">
+      <input type="checkbox" name="host_ids" value="{{ h.id }}" style="width:auto"
+             {{ 'checked' if request.args.get('host')|int == h.id }}>
+      <span><b>{{ h.name }}</b>（{{ h.ip }}:{{ h.port }} {{ {'linux':'Linux','windows':'Windows'}[h.os_type] }} / {{ {'ssh':'SSH','winrm':'WinRM'}[h.conn_type or 'ssh'] }}）</span>
+    </label>
+    {% else %}
+    <div class="muted" style="padding:10px">还没有主机，请先到"主机管理"添加或批量导入</div>
+    {% endfor %}
+  </div>
+  <div style="margin:6px 0 14px">
+    <a href="#" class="muted" onclick="document.querySelectorAll('#hostbox input').forEach(i=>i.checked=true);return false">全选</a> /
+    <a href="#" class="muted" onclick="document.querySelectorAll('#hostbox input').forEach(i=>i.checked=false);return false">全不选</a>
+  </div>
+
+  <label>检查模式</label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#263238">
+    <input type="radio" name="mode" value="auto" checked style="width:auto" onclick="document.getElementById('blbox').style.display='none'">
+    <span><b>自动识别（推荐）</b>：先探测主机上装了哪些数据库/中间件，自动只跑识别到的基线（含操作系统基线）</span>
+  </label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#263238">
+    <input type="radio" name="mode" value="fixed" style="width:auto" onclick="document.getElementById('blbox').style.display=''">
+    <span>指定基线类型</span>
+  </label>
+  <div id="blbox" style="display:none;margin-top:6px">
+    <select name="baseline">
+      <optgroup label="操作系统">
+        <option value="linux">Linux 主机基线（50 项）</option>
+        <option value="windows">Windows 主机基线（50 项）</option>
+      </optgroup>
+      <optgroup label="数据库">
+        {% for k, v in baselines.items() if v.kind == 'db' %}
+        <option value="{{ k }}">{{ v.name }}基线</option>
+        {% endfor %}
+      </optgroup>
+      <optgroup label="中间件">
+        {% for k, v in baselines.items() if v.kind == 'mw' %}
+        <option value="{{ k }}">{{ v.name }}基线</option>
+        {% endfor %}
+      </optgroup>
+    </select>
+  </div>
+
+  <div class="guide" style="margin-top:12px">Linux 主机走 SSH；Windows 主机可选 SSH（需装 OpenSSH）或 WinRM（原生支持）。数据库/中间件基线需在主机管理中填好对应数据库账号密码。全部命令只读。</div>
+  <div style="margin-top:16px"><button class="btn">开始检查</button></div>
+</form>
+</div>
+{% endblock %}
